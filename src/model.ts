@@ -17,11 +17,22 @@ export interface Send {
 	pan: number
 	mute: boolean
 	solo: boolean
+	/** The strip is shown on this bus */
+	visible: boolean
 }
+
+// Strip types (`strips[].type`) the web UI gives no mute or solo buttons:
+// talk mics (local, peered) get none, cue returns get M > C, TALK, C > M.
+const NO_MUTE_SOLO_TYPES = new Set([2, 3, 6])
 
 export interface Strip {
 	id: number
 	name: string
+	type: number
+	/** Its group, or -1 */
+	groupId: number
+	/** The web UI shows mute and solo buttons on strips of this type */
+	hasMuteSolo: boolean
 	/** For a linked pair shown as one strip: the other strip's id */
 	partnerId: number | null
 	/** Shown as one strip with its partner, and this is the one shown (the lower id, as in the web UI) */
@@ -122,9 +133,13 @@ export class AnubisModel {
 			const linked = num(input.linked_input_id, -1)
 			const collapsedLink = linked !== -1 && bool(input.collapsed_link)
 			const partnerId = collapsedLink && byId.has(linked) ? linked : null
+			const type = num(s.type, -1)
 			result.push({
 				id,
 				name: str(s.name),
+				type,
+				groupId: num(s.group_id, -1),
+				hasMuteSolo: !NO_MUTE_SOLO_TYPES.has(type),
 				partnerId,
 				isPairLeader: partnerId !== null && id < partnerId,
 				collapsedLink,
@@ -141,6 +156,7 @@ export class AnubisModel {
 								pan: num(send.pan),
 								mute: bool(send.mute),
 								solo: bool(send.solo),
+								visible: bool(send.visible),
 							},
 						]
 					}),
@@ -152,6 +168,18 @@ export class AnubisModel {
 
 	strip(id: number): Strip | undefined {
 		return this.strips().find((s) => s.id === id)
+	}
+
+	/**
+	 * Whether a group is collapsed on a bus (its strips are then shown as
+	 * one group strip there). Null when the group isn't in the state.
+	 */
+	groupCollapsedOn(groupId: number, busId: number): boolean | null {
+		const group = arr(this.mixer.groups)
+			.map(obj)
+			.find((g) => num(g.id, -1) === groupId)
+		const collapsed = group ? arr(group.collapsed_on_bus)[busId] : undefined
+		return typeof collapsed === 'boolean' ? collapsed : null
 	}
 
 	busses(): Bus[] {

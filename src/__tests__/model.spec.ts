@@ -22,7 +22,9 @@ describe('AnubisModel', () => {
 		expect(avio).toMatchObject({ name: 'Stream-L', partnerId: 1201, isPairLeader: true, connected: true })
 		expect(strips.find((s) => s.id === 1201)).toMatchObject({ partnerId: 1200, isPairLeader: false })
 		expect(strips.find((s) => s.id === 1000)).toMatchObject({ partnerId: null, isPairLeader: false })
-		expect(avio?.sends.get(0)).toEqual({ bus: 0, gain: -165, pan: -100, mute: false, solo: false })
+		expect(avio?.sends.get(0)).toEqual({ bus: 0, gain: -165, pan: -100, mute: false, solo: false, visible: true })
+		expect(avio).toMatchObject({ type: 1, groupId: -1, hasMuteSolo: true })
+		expect(strips.find((s) => s.id === 4)).toMatchObject({ name: 'CUE1-L', type: 6, hasMuteSolo: false })
 	})
 
 	it('follows on-screen order when strips move', () => {
