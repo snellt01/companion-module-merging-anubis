@@ -44,8 +44,9 @@ Numbers in the names are the Anubis's own ids (MIC 1 is 1000, MIC 2 is
   shows that button and lets you press it: not on talk or cue return
   strips, not on a bus the strip isn't shown on or where its group is
   collapsed, and not while the strip's input is disconnected. When one
-  is refused, the log says why. A strip change on MIXER also changes
-  MIXER-ALT and CUE1 (the Anubis does this itself).
+  is refused, the log says why. A strip change on MIXER or MIXER-ALT
+  also changes the other, and any cue bus following the mix (the
+  Anubis does this itself).
 - **Strip: fader level**: sets a strip's fader on a bus to a level in dB,
   from -144.5 (-inf) to +6. Like the Anubis's own level entry, it keeps
   whole tenths of a dB and anything outside the range goes to the end.
@@ -54,7 +55,8 @@ Numbers in the names are the Anubis's own ids (MIC 1 is 1000, MIC 2 is
   goes to -143.5 dB, the bottom of the scale.
 - The fader actions work on music, DAW and effect return strips (the
   others have no fader on the Anubis), on any bus the strip is shown on.
-  A linked pair moves together, as its shared fader does. Several moves
+  A linked pair moves together, as its shared fader does, keeping any
+  difference between its two sides' own levels. Several moves
   within 50 ms send only the last.
 - **Strip: pan** (to a position, -100 left to 100 right) and **Strip: pan
   left or right** (by a step, negative is left). As on the Anubis, pan
