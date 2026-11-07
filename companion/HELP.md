@@ -92,6 +92,37 @@ Numbers in the names are the Anubis's own ids (MIC 1 is 1000, MIC 2 is
 - **Read the Anubis state again**: reads everything again. Sends nothing
   to the mixer.
 
+### Presets
+
+Ready-made buttons, listed once the Anubis has been read, from its own
+strips, buses and preamps:
+
+- **Strips (MIXER)**: mute and solo (where the strip has them) and fader
+  up / down 1 dB showing the level, for each strip.
+- **Buses**: mute for each bus; dim and mono for MIXER, MIXER-ALT and a
+  cue bus following the mix.
+- **Preamps**: 48 V, phase, low cut, cut and lock (where the preamp has
+  them) and gain up / down 1 dB showing the gain.
+
+Each lights up with the state, whatever changed it. After placing one,
+its strip or bus can be changed in the button's action and feedback.
+
+### Linking and unlinking strips
+
+Buttons keep addressing a strip by its ID, so changing links on the
+Anubis changes what some buttons do:
+
+- **Unlinking a pair**: a button set up for the pair (e.g. "Stream-L +
+  Stream-R") now controls only the left strip, as the Anubis's own strip
+  buttons do. Set up a second button for the right strip if needed.
+- **Linking two strips**: buttons for the first (left) strip now control
+  the pair. Buttons for the second strip are refused, with a line in
+  the log, until they're pointed at the pair; their feedback still
+  shows that strip's own state.
+- **Expanding a pair** (still linked, shown as two strips): each side is
+  controlled on its own, as on the Anubis.
+- A linked pair shown as one strip has no pan, as on the Anubis.
+
 ### Notes
 
 - Strips and buses are picked from the Anubis's own list and remembered

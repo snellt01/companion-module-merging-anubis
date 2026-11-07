@@ -153,6 +153,7 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 			this.definitionsKey = key
 			this.updateActions()
 			this.updateFeedbacks()
+			this.updatePresets()
 			this.updateVariableDefinitions()
 		}
 		const changedValues: VariablesSchema = {}

@@ -27,12 +27,12 @@ const PREAMP_SETTINGS: DropdownChoice<PreampSetting>[] = [
 	{ id: 'lock', label: 'Locked' },
 ]
 
-const RED = 0xcc0000
-const YELLOW = 0xffcc00
-const ORANGE = 0xff8000
-const BLUE = 0x0050c8
-const WHITE = 0xffffff
-const BLACK = 0x000000
+export const RED = 0xcc0000
+export const YELLOW = 0xffcc00
+export const ORANGE = 0xff8000
+export const BLUE = 0x0050c8
+export const WHITE = 0xffffff
+export const BLACK = 0x000000
 
 /** Strips for a list: a linked pair shown as one strip is one entry */
 export function stripChoices(model: AnubisModel | null): DropdownChoice<number>[] {
