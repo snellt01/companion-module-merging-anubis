@@ -13,8 +13,9 @@ states stay correct.
 
 **Status:** reads the Anubis and shows its state as variables and button
 feedbacks, controls the mixer's strips (mute, solo, fader, pan), buses
-(master, mute, dim, mono, ref) and preamps (input type, gain, 48 V,
-pad/boost, phase, low cut, cut, lock), and offers presets. Every action
+(master, mute, dim, mono, ref), talkback (talk to a cue bus, talk to
+all, source) and preamps (input type, gain, 48 V, pad/boost, phase, low
+cut, cut, lock), and offers presets. Every action but talkback's
 has been tested on a real Anubis (firmware `2.0.0-RL-26Q2-20260605.2`,
 Music mission), from the module and from Companion buttons. Started from
 Bitfocus's `companion-module-template-ts` (commit `e0d42b7`).
@@ -83,6 +84,8 @@ package versions at least three days old.
 - [x] Watch linking, unlinking, expanding and collapsing a pair on a real
       unit: the module followed each change (replayed through its code),
       and the tests use the messages the unit sent.
+- [ ] Test the talkback actions on a real unit (talk to a cue bus, talk
+      to all, source), and check what a talk button on the unit reports.
 - [ ] An "input disconnected" feedback (mute, solo and pan are refused
       while an input is disconnected).
 - [ ] An identify action.

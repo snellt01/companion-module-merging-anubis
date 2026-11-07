@@ -38,6 +38,7 @@ const SEND_PATH =
 	/^\$\._oem_ui_process_engine\.music\.mixer\.strips\[\?\(@\.id==\d+\)\]\[0\]\.sends\[\?\(@\.id==\d+\)\]\[0\]$/
 const BUS_PATH = /^\$\._oem_ui_process_engine\.music\.mixer\.busses\[\?\(@\.id==\d+\)\]\[0\]$/
 const PREAMP_PATH = /^\$\._modules\[\?\(@\.id==\d+\)\]\[0\]\.custom\.ins\.channels\[\d+\]$/
+const SETTINGS_PATH = `${MIXER_PATH}.settings`
 
 export const PAN_MIN = -100
 export const PAN_MAX = 100
@@ -75,7 +76,13 @@ const ALLOWED: { path: RegExp; fields: Record<string, FieldCheck> }[] = [
 			downmix: isBool,
 			// The web UI only ever sends ref: true
 			ref: isTrue,
+			talking_to_cue: isBool,
 		},
+	},
+	{
+		// Only the talkback source: the other mixer settings are the web UI's settings page
+		path: /^\$\._oem_ui_process_engine\.music\.mixer\.settings$/,
+		fields: { talk_input: isIntIn(0, 99999) },
 	},
 	{
 		path: PREAMP_PATH,
@@ -334,6 +341,76 @@ export function busRef(model: AnubisModel, busId: number): Write {
 		path: busPath(busId),
 		value: { ref: true },
 		confirmed: (m) => m.bus(busId)?.masterGain === m.refLevel,
+	}
+}
+
+/**
+ * Talkback to a cue bus, as the bus's TALK button (or TALK on its cue
+ * return strip) sends it: only on cue buses with their own mix (cue mode
+ * 0). On and off are sent even when the bus already shows that state, so
+ * a talk button released before the Anubis has reported the press still
+ * stops talking.
+ */
+export function talkToCue(model: AnubisModel, busId: number, set: OnOff): Write {
+	const bus = existingBus(model, busId)
+	if (!bus.hasTalk) throw new WriteRefused(`${bus.name} has no TALK button (only cue buses with their own mix)`)
+	const on = set === 'toggle' ? !bus.talking : set === 'on'
+	return {
+		description: `${on ? 'Talk to' : 'Stop talking to'} ${bus.name}`,
+		control: `bus ${busId} talk`,
+		path: busPath(busId),
+		value: { talking_to_cue: on },
+		confirmed: (m) => m.bus(busId)?.talking === on,
+	}
+}
+
+/**
+ * TALK ALL, as the web UI sends it: one write to every cue bus with its own
+ * mix, all on, or (when talkback to any cue bus is on) all off. On and off
+ * set them all whatever the current state.
+ */
+export function talkToAll(model: AnubisModel, set: OnOff): Write[] {
+	const cues = model.busses().filter((b) => b.type === 2)
+	const targets = cues.filter((b) => b.hasTalk)
+	if (targets.length === 0) throw new WriteRefused('No cue bus has a TALK button')
+	const on = set === 'toggle' ? !cues.some((b) => b.talking) : set === 'on'
+	return targets.map((b) => talkToCue(model, b.id, on ? 'on' : 'off'))
+}
+
+/**
+ * The talkback's source, as TALK INPUT in a strip's menu sets it: offered
+ * on music input and talk mic strips shown on a monitor bus (MIXER or
+ * MIXER-ALT). The web UI's item toggles (choosing the current source again
+ * goes back to the built-in talk mic, 998); this only sets, and returns
+ * null when the strip is already the source.
+ */
+export function talkInput(model: AnubisModel, stripId: number): Write | null {
+	id(stripId, 'strip')
+	const strip = model.strip(stripId)
+	if (!strip) throw new WriteRefused(`There is no strip ${stripId} in the mixer`)
+	if (!strip.canTalk) throw new WriteRefused(`${strip.name} can't be the talk input (strip type ${strip.type})`)
+	const shownOnMonitor = model
+		.busses()
+		.filter((b) => b.type === 1)
+		.some((b) => {
+			try {
+				shownSend(model, stripId, b.id, 'TALK INPUT', (s) => s.canTalk)
+				return true
+			} catch (e) {
+				if (e instanceof WriteRefused) return false
+				throw e
+			}
+		})
+	if (!shownOnMonitor) throw new WriteRefused(`${strip.name} isn't shown on a monitor bus, where TALK INPUT is offered`)
+	const current = model.talkInput
+	if (current === null) throw new WriteRefused("The talkback source isn't in the mixer settings")
+	if (current === stripId) return null
+	return {
+		description: `Talkback source to ${strip.name}`,
+		control: 'talk input',
+		path: SETTINGS_PATH,
+		value: { talk_input: stripId },
+		confirmed: (m) => m.talkInput === stripId,
 	}
 }
 

@@ -17,6 +17,9 @@ export type FeedbacksSchema = {
 	bus_solo: { type: 'boolean'; options: BusOptions }
 	preamp_setting: { type: 'boolean'; options: { preamp: number; setting: PreampSetting } }
 	preamp_mode: { type: 'boolean'; options: { preamp: number; mode: number } }
+	talk_cue: { type: 'boolean'; options: BusOptions }
+	talk_any: { type: 'boolean'; options: Record<string, never> }
+	talk_input: { type: 'boolean'; options: { strip: number } }
 }
 
 type PreampSetting = 'phantom' | 'pad' | 'lift' | 'phase' | 'lowCut' | 'cut' | 'lock'
@@ -183,6 +186,40 @@ export function UpdateFeedbacks(self: ModuleInstance): void {
 				},
 			],
 			callback: (fb) => preamp(fb.options.preamp)?.mode === Number(fb.options.mode),
+		},
+		talk_cue: {
+			type: 'boolean',
+			name: 'Talkback: talking to a cue bus',
+			defaultStyle: { bgcolor: ORANGE, color: BLACK },
+			options: [...busOption],
+			callback: (fb) => bus(fb.options)?.talking ?? false,
+		},
+		talk_any: {
+			type: 'boolean',
+			name: 'Talkback: talking to any cue bus',
+			defaultStyle: { bgcolor: ORANGE, color: BLACK },
+			options: [],
+			callback: () =>
+				model()
+					?.busses()
+					.some((b) => b.talking) ?? false,
+		},
+		talk_input: {
+			type: 'boolean',
+			name: 'Talkback: source',
+			description: "A strip is the talkback's input",
+			defaultStyle: { bgcolor: BLUE, color: WHITE },
+			options: [
+				{
+					type: 'dropdown',
+					id: 'strip',
+					label: 'Strip',
+					choices: strips,
+					default: strips[0]?.id ?? 0,
+					allowCustom: true,
+				},
+			],
+			callback: (fb) => model()?.talkInput === Number(fb.options.strip),
 		},
 	}
 	self.setFeedbackDefinitions(definitions)

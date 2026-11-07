@@ -131,5 +131,54 @@ export function UpdatePresets(self: ModuleInstance): void {
 	}
 	sections.push({ id: 'preamps', name: 'Preamps', definitions: preamps })
 
+	// Talkback: talk while held, to each cue bus with a TALK button and to
+	// all of them; and the talkback's source
+	const talk: string[] = []
+	for (const { id, label } of busChoices(model)) {
+		if (!model.bus(id)?.hasTalk) continue
+		const options = { bus: id }
+		presets[`talk_cue_${id}`] = {
+			type: 'simple',
+			name: `Talk to ${label} (while held)`,
+			style: style(`TALK\n${label}`),
+			steps: [
+				{
+					down: [{ actionId: 'talk_cue', options: { ...options, set: 'on' } }],
+					up: [{ actionId: 'talk_cue', options: { ...options, set: 'off' } }],
+				},
+			],
+			feedbacks: [{ feedbackId: 'talk_cue', options, style: { bgcolor: ORANGE, color: BLACK } }],
+		}
+		talk.push(`talk_cue_${id}`)
+	}
+	if (talk.length > 0) {
+		presets.talk_all = {
+			type: 'simple',
+			name: 'Talk to all cue buses (while held)',
+			style: style('TALK\nALL'),
+			steps: [
+				{
+					down: [{ actionId: 'talk_all', options: { set: 'on' } }],
+					up: [{ actionId: 'talk_all', options: { set: 'off' } }],
+				},
+			],
+			feedbacks: [{ feedbackId: 'talk_any', options: {}, style: { bgcolor: ORANGE, color: BLACK } }],
+		}
+		talk.push('talk_all')
+	}
+	for (const { id, label } of stripChoices(model)) {
+		const strip = model.strip(id)
+		if (!strip?.canTalk || ![...strip.sends.values()].some((s) => s.visible && model.bus(s.bus)?.type === 1)) continue
+		presets[`talk_input_${id}`] = {
+			type: 'simple',
+			name: `Talkback source: ${label}`,
+			style: style(`TALK FROM\n${label}`),
+			steps: [{ down: [{ actionId: 'talk_input', options: { strip: id } }], up: [] }],
+			feedbacks: [{ feedbackId: 'talk_input', options: { strip: id }, style: { bgcolor: BLUE, color: WHITE } }],
+		}
+		talk.push(`talk_input_${id}`)
+	}
+	sections.push({ id: 'talkback', name: 'Talkback', definitions: talk })
+
 	self.setPresetDefinitions(sections, presets)
 }

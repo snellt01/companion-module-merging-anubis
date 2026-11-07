@@ -77,29 +77,39 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 	 * Build a write (or a short sequence, as the web UI sends for pad/boost
 	 * and low cut) from the current state and send it, in order. Anything
 	 * refused, unacknowledged or not reported back is logged as a warning,
-	 * and stops the rest of a sequence.
+	 * and stops the rest of a sequence. With `together`, the writes (to
+	 * different controls) go out at once, as the web UI sends TALK ALL.
 	 */
-	async write(build: (model: AnubisModel) => Write | Write[] | null): Promise<void> {
-		const model = this.anubis?.model
-		if (!this.anubis || !model) {
+	async write(build: (model: AnubisModel) => Write | Write[] | null, { together = false } = {}): Promise<void> {
+		const anubis = this.anubis
+		const model = anubis?.model
+		if (!anubis || !model) {
 			this.log('warn', 'Not connected to the Anubis; nothing sent')
 			return
 		}
-		let write: Write | null = null
+		let built: Write | Write[] | null
 		try {
-			const built = build(model)
-			if (!built) return // already in that state
-			for (write of Array.isArray(built) ? built : [built]) {
-				const confirmed = await this.anubis.write(write)
-				if (confirmed === false) {
-					this.log('warn', `${write.description}: the Anubis didn't report the change back`)
-					return
-				}
-			}
+			built = build(model)
 		} catch (e) {
-			const what = write ? `${write.description}: ` : ''
-			this.log('warn', `${what}${e instanceof Error ? e.message : String(e)}`)
+			this.log('warn', e instanceof Error ? e.message : String(e))
+			return
 		}
+		if (!built) return // already in that state
+		const send = async (write: Write): Promise<boolean> => {
+			try {
+				if ((await anubis.write(write)) !== false) return true
+				this.log('warn', `${write.description}: the Anubis didn't report the change back`)
+			} catch (e) {
+				this.log('warn', `${write.description}: ${e instanceof Error ? e.message : String(e)}`)
+			}
+			return false
+		}
+		const writes = Array.isArray(built) ? built : [built]
+		if (together) {
+			await Promise.all(writes.map(send))
+			return
+		}
+		for (const write of writes) if (!(await send(write))) return
 	}
 
 	private connect(): void {
@@ -153,7 +163,7 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 				// The buses it's shown on (its per-bus variables)
 				[...s.sends.values()].filter((send) => send.visible).map((send) => send.bus),
 			]),
-			model.busses().map((b) => [b.id, b.monitors, b.panEditable]),
+			model.busses().map((b) => [b.id, b.monitors, b.panEditable, b.hasTalk]),
 		])
 		if (key !== this.definitionsKey) {
 			this.definitionsKey = key

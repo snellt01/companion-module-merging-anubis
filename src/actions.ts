@@ -18,6 +18,9 @@ import {
 	stripMute,
 	stripPan,
 	stripSolo,
+	talkInput,
+	talkToAll,
+	talkToCue,
 } from './writes.js'
 
 type StripButtonOptions = { strip: number; bus: number; set: OnOff }
@@ -49,6 +52,9 @@ export type ActionsSchema = {
 	preamp_lock: { options: PreampSwitchOptions }
 	preamp_lowcut: { options: PreampSwitchOptions }
 	preamp_pad: { options: { preamp: number; pad: PadMode } }
+	talk_cue: { options: BusButtonOptions }
+	talk_all: { options: { set: OnOff } }
+	talk_input: { options: { strip: number } }
 }
 
 type PreampSwitchOptions = { preamp: number; set: OnOff }
@@ -80,6 +86,12 @@ export function UpdateActions(self: ModuleInstance): void {
 	const busses = busChoices(model)
 	const panBusses = busses.filter((b) => model?.bus(b.id)?.panEditable)
 	const monitorBusses = busses.filter((b) => model?.bus(b.id)?.monitors)
+	const talkBusses = busses.filter((b) => model?.bus(b.id)?.hasTalk)
+	// Music input and talk mic strips shown on MIXER or MIXER-ALT
+	const talkStrips = stripsWhere((id) => {
+		const strip = model?.strip(id)
+		return strip?.canTalk && [...strip.sends.values()].some((s) => s.visible && model?.bus(s.bus)?.type === 1)
+	})
 	const preampsWith = (capability: string) =>
 		preampChoices(model).filter((c) => model?.preamp(c.id)?.capabilities[capability] === true)
 	const preamps = preampChoices(model)
@@ -302,6 +314,32 @@ export function UpdateActions(self: ModuleInstance): void {
 			],
 			callback: async ({ options: o }) => {
 				await self.write((m) => preampPad(m, Number(o.preamp), o.pad))
+			},
+		},
+		talk_cue: {
+			name: 'Talkback: talk to a cue bus',
+			description:
+				'Talkback to a cue bus with its own mix, as its TALK button does. For a button that talks while held, use On when pressed and Off when released',
+			options: [busOption(talkBusses), onOffOption('Talk')],
+			callback: async ({ options: o }) => {
+				await self.write((m) => talkToCue(m, Number(o.bus), o.set))
+			},
+		},
+		talk_all: {
+			name: 'Talkback: talk to all cue buses',
+			description:
+				'TALK ALL: every cue bus with its own mix. Toggle turns them all off if any cue bus is being talked to, else all on',
+			options: [onOffOption('Talk')],
+			callback: async ({ options: o }) => {
+				await self.write((m) => talkToAll(m, o.set), { together: true })
+			},
+		},
+		talk_input: {
+			name: 'Talkback: source',
+			description: "Sets the talkback's input, as TALK INPUT in a strip's menu does (TALK is the built-in talk mic)",
+			options: [stripOption(talkStrips)],
+			callback: async ({ options: o }) => {
+				await self.write((m) => talkInput(m, Number(o.strip)))
 			},
 		},
 	})

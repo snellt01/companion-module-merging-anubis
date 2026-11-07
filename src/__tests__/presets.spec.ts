@@ -50,6 +50,13 @@ describe('presets', () => {
 		expect(ids).not.toContain('bus_dim_6') // CUE5 has no dim
 		expect(ids).toContain('preamp_48v_1000')
 		expect(ids).not.toContain('preamp_48v_1002') // jack: no 48 V
+		expect(ids).toEqual(expect.arrayContaining(['talk_cue_3', 'talk_cue_6', 'talk_all', 'talk_input_1000']))
+		expect(ids).not.toContain('talk_cue_2') // CUE1 follows the mix: no TALK button
+		expect(ids).not.toContain('talk_input_4') // a cue return can't be the talk input
+		expect(captured.presets.talk_cue_3.steps[0]).toMatchObject({
+			down: [{ actionId: 'talk_cue', options: { bus: 3, set: 'on' } }],
+			up: [{ actionId: 'talk_cue', options: { bus: 3, set: 'off' } }],
+		})
 		expect(captured.presets.strip_mute_1200.style.text).toBe('Stream-L + Stream-R\nMUTE')
 		expect(captured.presets.strip_fader_up_1000.style.text).toContain('$(anubis:strip_1000_gain)')
 		// Every preset is in a section, once
@@ -59,17 +66,19 @@ describe('presets', () => {
 
 	it('uses only actions and feedbacks the module defines, with options they accept', async () => {
 		const { captured, actions, feedbacks, writes } = build()
+		let run = 0
 		for (const [id, preset] of Object.entries(captured.presets)) {
-			for (const a of preset.steps[0].down) {
+			for (const a of [...preset.steps[0].down, ...preset.steps[0].up]) {
 				expect(actions[a.actionId], `${id}: ${a.actionId}`).toBeDefined()
 				await actions[a.actionId].callback({ options: a.options })
+				run++
 			}
 			for (const f of preset.feedbacks) {
 				expect(feedbacks[f.feedbackId], `${id}: ${f.feedbackId}`).toBeDefined()
 				expect(typeof feedbacks[f.feedbackId].callback({ options: f.options })).toBe('boolean')
 			}
 		}
-		// Each preset's action builds a write (or nothing to do) without being refused
-		expect(writes.length).toBe(Object.keys(captured.presets).length)
+		// Each preset's actions build a write (or nothing to do) without being refused
+		expect(writes.length).toBe(run)
 	})
 })

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { AnubisConnection, type AnubisEvents } from '../anubis.js'
 import { BayeuxListener } from '../bayeux.js'
 import { AnubisModel } from '../model.js'
-import { stripFader, stripMute } from '../writes.js'
+import { stripFader, stripMute, talkToCue } from '../writes.js'
 import { FakeAnubis, fixtureState } from './fake-anubis.js'
 
 const SEND = (strip: number, bus: number) =>
@@ -98,6 +98,21 @@ describe('AnubisConnection against a pretend Anubis', () => {
 		expect(results).toEqual([true, null, true])
 		expect(fake.published.map((c) => c.value)).toEqual([{ gain: -100 }, { gain: -300 }])
 		expect(latest?.strip(1210)?.sends.get(0)?.faderGain).toBe(-300)
+	})
+
+	it('stops talking when a talk button is released before the press comes back', async () => {
+		const CUE2 = '$._oem_ui_process_engine.music.mixer.busses[?(@.id==3)][0]'
+		fake.expect(CUE2, { talking_to_cue: true })
+		fake.expect(CUE2, { talking_to_cue: false })
+		connection = new AnubisConnection({ url, retryMs: 50 }, events)
+		connection.start()
+		await waitFor(() => loads === 1)
+		// Both built from the state before the press is reported back
+		const press = connection.write(talkToCue(latest!, 3, 'on'))
+		const release = connection.write(talkToCue(latest!, 3, 'off'))
+		await Promise.all([press, release])
+		expect(fake.published.map((c) => c.value)).toEqual([{ talking_to_cue: true }, { talking_to_cue: false }])
+		expect(latest?.bus(3)?.talking).toBe(false)
 	})
 
 	it("reports a write that doesn't come back", async () => {

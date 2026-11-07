@@ -16,6 +16,9 @@ import {
 	stripMute,
 	stripPan,
 	stripSolo,
+	talkInput,
+	talkToAll,
+	talkToCue,
 	WriteRefused,
 } from '../writes.js'
 import { fixtureState } from './fake-anubis.js'
@@ -303,6 +306,67 @@ describe('preamp writes', () => {
 	})
 })
 
+describe('talkback writes', () => {
+	const BUS = (id: number) => `${MIX}.busses[?(@.id==${id})][0]`
+	const talking = (...busses: number[]) => {
+		const tree = fixtureState()
+		for (const b of busses) applyChange(tree, BUS(b), { talking_to_cue: true })
+		return new AnubisModel(tree)
+	}
+
+	it('talks to a cue bus with its own mix, as its TALK button does', () => {
+		const write = talkToCue(model(), 3, 'toggle')
+		expect(write).toMatchObject({ path: BUS(3), value: { talking_to_cue: true }, control: 'bus 3 talk' })
+		expect(write.description).toBe('Talk to CUE2')
+		expect(write.confirmed(talking(3))).toBe(true)
+		expect(talkToCue(talking(3), 3, 'toggle').value).toEqual({ talking_to_cue: false })
+	})
+
+	it('sends on and off even when the bus already shows it, for a talk button that is released quickly', () => {
+		expect(talkToCue(model(), 3, 'off').value).toEqual({ talking_to_cue: false })
+		expect(talkToCue(talking(3), 3, 'on').value).toEqual({ talking_to_cue: true })
+	})
+
+	it('has no TALK on a cue bus following the mix, or on other buses', () => {
+		expect(() => talkToCue(model(), 2, 'on')).toThrow('CUE1 has no TALK button') // cue mode 1
+		expect(() => talkToCue(model(), 0, 'on')).toThrow('no TALK button')
+		expect(() => talkToCue(model(), 12, 'on')).toThrow('no bus 12')
+	})
+
+	it('TALK ALL turns every cue bus with its own mix on, or all off if any cue bus is talking', () => {
+		const on = talkToAll(model(), 'toggle')
+		expect(on.map((w) => w.path)).toEqual([BUS(3), BUS(4), BUS(5), BUS(6)])
+		expect(on.every((w) => w.value.talking_to_cue === true)).toBe(true)
+		// Talking to CUE1 (following the mix) counts, though TALK ALL doesn't write to it
+		const off = talkToAll(talking(2), 'toggle')
+		expect(off.map((w) => w.path)).toEqual([BUS(3), BUS(4), BUS(5), BUS(6)])
+		expect(off.every((w) => w.value.talking_to_cue === false)).toBe(true)
+		expect(talkToAll(talking(4), 'on').every((w) => w.value.talking_to_cue === true)).toBe(true)
+	})
+
+	it('sets the talkback source, as TALK INPUT in a strip menu does', () => {
+		const write = talkInput(model(), 1000)
+		expect(write).toMatchObject({ path: `${MIX}.settings`, value: { talk_input: 1000 }, control: 'talk input' })
+		expect(write?.description).toBe('Talkback source to MIC 1')
+		const tree = fixtureState()
+		applyChange(tree, `${MIX}.settings`, { talk_input: 1000 })
+		expect(write?.confirmed(new AnubisModel(tree))).toBe(true)
+		// Already the source: nothing to send (the web UI's item would switch back to the built-in mic)
+		expect(talkInput(new AnubisModel(tree), 1000)).toBeNull()
+		expect(talkInput(model(), 1200)?.value).toEqual({ talk_input: 1200 }) // a linked pair, by its shown strip
+	})
+
+	it('offers TALK INPUT only on music input and talk mic strips shown on MIXER or MIXER-ALT', () => {
+		expect(() => talkInput(model(), 4)).toThrow("CUE1-L can't be the talk input")
+		expect(() => talkInput(model(), 1201)).toThrow("isn't shown on a monitor bus") // hidden half of a pair
+		const tree = fixtureState()
+		applyChange(tree, SEND(1001, 0), { visible: false })
+		applyChange(tree, SEND(1001, 1), { visible: false })
+		expect(() => talkInput(new AnubisModel(tree), 1001)).toThrow("MIC 2 isn't shown on a monitor bus")
+		expect(() => talkInput(model(), 9999)).toThrow('no strip 9999')
+	})
+})
+
 describe('isAllowedWrite', () => {
 	it('allows the fixed list only', () => {
 		expect(isAllowedWrite({ path: SEND(1210, 0), value: { mute: true } })).toBe(true)
@@ -333,6 +397,15 @@ describe('isAllowedWrite', () => {
 		expect(isAllowedWrite({ path: BUS, value: { has_solo: false } })).toBe(false)
 		expect(isAllowedWrite({ path: BUS, value: { reset: true } })).toBe(false)
 		expect(isAllowedWrite({ path: BUS, value: { name: 'X' } })).toBe(false)
+		expect(isAllowedWrite({ path: BUS, value: { talking_to_cue: true } })).toBe(true)
+		expect(isAllowedWrite({ path: BUS, value: { talking_to_cue: 1 } })).toBe(false)
+		expect(isAllowedWrite({ path: BUS, value: { dim_level_on_talk: -150 } })).toBe(false)
+		const SETTINGS = `${MIX}.settings`
+		expect(isAllowedWrite({ path: SETTINGS, value: { talk_input: 1000 } })).toBe(true)
+		expect(isAllowedWrite({ path: SETTINGS, value: { talk_input: -1 } })).toBe(false)
+		expect(isAllowedWrite({ path: SETTINGS, value: { talk_latch: true } })).toBe(false)
+		expect(isAllowedWrite({ path: SETTINGS, value: { ref_level: -200 } })).toBe(false)
+		expect(isAllowedWrite({ path: `${SETTINGS}.x`, value: { talk_input: 1000 } })).toBe(false)
 		const CH = '$._modules[?(@.id==154)][0].custom.ins.channels[0]'
 		expect(isAllowedWrite({ path: CH, value: { micGain: 575 } })).toBe(true)
 		expect(isAllowedWrite({ path: CH, value: { m48V: true } })).toBe(true)

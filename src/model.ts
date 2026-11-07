@@ -29,6 +29,8 @@ export interface Send {
 const NO_MUTE_SOLO_TYPES = new Set([2, 3, 6])
 // Strip types the web UI draws a fader on: music input, DAW input, effect return.
 const FADER_TYPES = new Set([1, 4, 7])
+// Strip types whose menu offers TALK INPUT (on a monitor bus): music input, talk mics.
+const TALK_INPUT_TYPES = new Set([1, 2, 3])
 
 export interface Strip {
 	id: number
@@ -40,6 +42,8 @@ export interface Strip {
 	hasMuteSolo: boolean
 	/** The web UI shows a fader on strips of this type */
 	hasFader: boolean
+	/** The web UI's strip menu offers TALK INPUT on strips of this type */
+	canTalk: boolean
 	/** For a linked pair shown as one strip: the other strip's id */
 	partnerId: number | null
 	/** Shown as one strip with its partner, and this is the one shown (the lower id, as in the web UI) */
@@ -67,6 +71,12 @@ export interface Bus {
 	monitors: boolean
 	/** Strip pan can be changed on this bus (it isn't linked to the mix's) */
 	panEditable: boolean
+	/** A cue bus's `cue_mode` (0 its own mix, 1 following the mix), else -1 */
+	cueMode: number
+	/** Talkback to this cue bus is on */
+	talking: boolean
+	/** The web UI gives this bus a TALK button: a cue bus with its own mix (cue mode 0) */
+	hasTalk: boolean
 }
 
 export const INPUT_MODES = ['Mic', 'Line', 'Instrument'] as const
@@ -164,6 +174,7 @@ export class AnubisModel {
 				groupId: num(s.group_id, -1),
 				hasMuteSolo: !NO_MUTE_SOLO_TYPES.has(type),
 				hasFader: FADER_TYPES.has(type),
+				canTalk: TALK_INPUT_TYPES.has(type),
 				partnerId,
 				isPairLeader: partnerId !== null && id < partnerId,
 				collapsedLink,
@@ -218,13 +229,20 @@ export class AnubisModel {
 		return typeof level === 'number' ? level : null
 	}
 
+	/** The input the talkback uses (a strip id; 998 is the built-in talk mic), from the mixer settings */
+	get talkInput(): number | null {
+		const input = obj(this.mixer.settings).talk_input
+		return typeof input === 'number' ? input : null
+	}
+
 	busses(): Bus[] {
 		return arr(this.mixer.busses)
 			.map(obj)
 			.filter((b) => b.enabled !== false)
 			.map((b) => {
 				const type = num(b.type, -1)
-				const monitors = type === 1 || (type === 2 && num(b.cue_mode, -1) === 1)
+				const cueMode = type === 2 ? num(b.cue_mode, -1) : -1
+				const monitors = type === 1 || cueMode === 1
 				return {
 					id: num(b.id, -1),
 					name: str(b.name),
@@ -236,6 +254,9 @@ export class AnubisModel {
 					hasSolo: bool(b.has_solo),
 					monitors,
 					panEditable: monitors || !bool(b.pan_linked),
+					cueMode,
+					talking: bool(b.talking_to_cue),
+					hasTalk: cueMode === 0,
 				}
 			})
 	}

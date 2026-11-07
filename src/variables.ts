@@ -42,7 +42,10 @@ export function variableDefinitions(model: AnubisModel | null): CompanionVariabl
 		defs[`bus_${b.id}_mute`] = { name: `${b.name}: muted` }
 		defs[`bus_${b.id}_dim`] = { name: `${b.name}: dimmed` }
 		defs[`bus_${b.id}_mono`] = { name: `${b.name}: mono` }
+		if (b.hasTalk) defs[`bus_${b.id}_talk`] = { name: `${b.name}: talkback on` }
 	}
+	defs.talk_input = { name: 'Talkback source (strip name)' }
+	defs.talk_input_id = { name: 'Talkback source (strip id; 998 is the built-in talk mic)' }
 	for (const p of model.preamps()) {
 		const caps = p.capabilities
 		defs[`preamp_${p.inputId}_mode`] = { name: `${p.name} preamp: input type` }
@@ -81,7 +84,11 @@ export function variableValues(model: AnubisModel): CompanionVariableValues {
 		values[`bus_${b.id}_mute`] = b.mute
 		values[`bus_${b.id}_dim`] = b.dim
 		values[`bus_${b.id}_mono`] = b.mono
+		if (b.hasTalk) values[`bus_${b.id}_talk`] = b.talking
 	}
+	const talk = model.talkInput
+	values.talk_input = talk === null ? '' : (model.strip(talk)?.name ?? String(talk))
+	values.talk_input_id = talk ?? ''
 	for (const p of model.preamps()) {
 		values[`preamp_${p.inputId}_mode`] = INPUT_MODES[p.mode] ?? String(p.mode)
 		values[`preamp_${p.inputId}_gain`] = (p.gain / 10).toFixed(1)

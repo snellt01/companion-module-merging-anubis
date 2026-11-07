@@ -1,8 +1,8 @@
 ## Merging Anubis
 
 Controls a Merging Anubis in the **Music mission** through its web API:
-mixer faders, mutes, solos and pan, bus master, mute, dim and mono, and
-the preamps. Buttons show the Anubis's current state, whether a change
+mixer faders, mutes, solos and pan, bus master, mute, dim and mono,
+talkback, and the preamps. Buttons show the Anubis's current state, whether a change
 was made in Companion, on the unit, in its web UI or over OSC.
 
 Strips, buses and preamps can all be changed from buttons, but only where
@@ -25,6 +25,8 @@ the Anubis's own web UI would let you change them.
 - **Preamp: setting is on**: 48 V, pad, boost, phase invert, low cut, cut
   or locked.
 - **Preamp: input type**: mic, line or instrument.
+- **Talkback: talking to a cue bus / to any cue bus**, and **Talkback:
+  source** (a strip is the talkback's input).
 
 ### Variables
 
@@ -39,7 +41,10 @@ Numbers in the names are the Anubis's own ids (MIC 1 is 1000, MIC 2 is
   Pan can differ from bus to bus; on buses where the Anubis links pan
   to the mix, it's the value the web UI shows greyed out. Mute and solo
   on other buses are in the feedbacks.
-- `bus_<id>_name`, `_gain` (master, dB), `_mute`, `_dim`, `_mono`
+- `bus_<id>_name`, `_gain` (master, dB), `_mute`, `_dim`, `_mono`, and
+  `_talk` on cue buses with a TALK button
+- `talk_input` (the talkback source's strip name) and `talk_input_id`
+  (its ID; 998 is the built-in talk mic)
 - `preamp_<id>_mode`, `_gain` (dB), `_phase`, `_lowcut`, `_cut`, `_lock`,
   and where the preamp has them `_48v`, `_pad` and `_lift` (boost, which
   the Anubis stores as `lift`)
@@ -100,6 +105,17 @@ Numbers in the names are the Anubis's own ids (MIC 1 is 1000, MIC 2 is
 - **Preamp: lock**: as the preamp's lock button. While a preamp is
   locked, every other preamp action on it is refused; unlock it first.
   A preamp the Anubis reports as off line can't be changed at all.
+- **Talkback: talk to a cue bus**: on, off or toggle, as the bus's TALK
+  button. Only cue buses with their own mix have one (not a cue bus
+  following the mix). For a button that talks while held, use On when
+  pressed and Off when released, as the presets do; On and Off are
+  always sent, so a quick tap can't leave talkback on.
+- **Talkback: talk to all cue buses**: TALK ALL, to every cue bus with
+  its own mix. Toggle turns them all off if talkback to any cue bus is
+  on, otherwise all on, as on the Anubis.
+- **Talkback: source**: the input the talkback uses, as TALK INPUT in a
+  strip's menu: a music input or talk mic strip shown on MIXER or
+  MIXER-ALT. TALK is the built-in talk mic.
 - **Read the Anubis state again**: reads everything again. Sends nothing
   to the mixer.
 
@@ -114,6 +130,9 @@ strips, buses and preamps:
   cue bus following the mix.
 - **Preamps**: 48 V, phase, low cut, cut and lock (where the preamp has
   them) and gain up / down 1 dB showing the gain.
+- **Talkback**: TALK for each cue bus with a TALK button and TALK ALL,
+  talking while held; and a source button for each strip that can be the
+  talkback's input.
 
 Each lights up with the state, whatever changed it. After placing one,
 its strip or bus can be changed in the button's action and feedback.
