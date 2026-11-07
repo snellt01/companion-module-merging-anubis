@@ -32,6 +32,9 @@ export class FakeAnubis {
 	pollTimeout = 200
 	/** When set, state reads wait for this promise */
 	holdStateReads: Promise<void> | null = null
+	/** Most publish requests (POSTs to /cometd itself) open at once */
+	maxPublishesAtOnce = 0
+	private publishesOpen = 0
 
 	private server: Server
 	private queue: BayeuxMessage[] = []
@@ -89,8 +92,20 @@ export class FakeAnubis {
 			res.writeHead(404).end()
 			return
 		}
+		const isPublish = url === '/cometd'
+		if (isPublish) this.maxPublishesAtOnce = Math.max(this.maxPublishesAtOnce, ++this.publishesOpen)
+		try {
+			await this.cometd(req, res)
+		} finally {
+			if (isPublish) this.publishesOpen--
+		}
+	}
+
+	private async cometd(req: IncomingMessage, res: ServerResponse): Promise<void> {
 		let body = ''
 		for await (const chunk of req) body += String(chunk)
+		// Answer a little later, so publishes sent together would overlap
+		if (req.url === '/cometd') await new Promise((resolve) => setTimeout(resolve, 5))
 		const messages = JSON.parse(body) as BayeuxMessage[]
 		const replies: BayeuxMessage[] = []
 		for (const m of messages) {

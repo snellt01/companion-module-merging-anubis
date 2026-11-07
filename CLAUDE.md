@@ -56,7 +56,9 @@ a collapsed linked pair is written once to its left strip with
 `link_*`; OSC changes come back with `osc: true`. The Anubis sends
 partial lists kept by id (e.g. a few strips, one send each): merge them
 by id, never by position, and read the state again when one adds or
-leaves out items.
+leaves out items. Publish one message at a time beside the long poll, as
+CometD's own client does: several at once made a unit close a
+connection.
 
 ## Code and tests
 

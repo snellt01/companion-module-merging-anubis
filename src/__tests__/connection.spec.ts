@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { AnubisConnection, type AnubisEvents } from '../anubis.js'
 import { BayeuxListener } from '../bayeux.js'
 import { AnubisModel } from '../model.js'
-import { stripFader, stripMute, talkToCue } from '../writes.js'
+import { stripFader, stripMute, talkToAll, talkToCue } from '../writes.js'
 import { FakeAnubis, fixtureState } from './fake-anubis.js'
 
 const SEND = (strip: number, bus: number) =>
@@ -113,6 +113,19 @@ describe('AnubisConnection against a pretend Anubis', () => {
 		await Promise.all([press, release])
 		expect(fake.published.map((c) => c.value)).toEqual([{ talking_to_cue: true }, { talking_to_cue: false }])
 		expect(latest?.bus(3)?.talking).toBe(false)
+	})
+
+	it('sends writes made together one at a time, in order', async () => {
+		connection = new AnubisConnection({ url, retryMs: 50 }, events)
+		connection.start()
+		await waitFor(() => loads === 1)
+		const writes = talkToAll(latest!, 'on')
+		expect(writes.length).toBeGreaterThan(1)
+		for (const w of writes) fake.expect(w.path, w.value)
+		const results = await Promise.all(writes.map(async (w) => connection!.write(w)))
+		expect(results.every((r) => r === true)).toBe(true)
+		expect(fake.published.map((c) => c.path)).toEqual(writes.map((w) => w.path))
+		expect(fake.maxPublishesAtOnce).toBe(1)
 	})
 
 	it('merges a partial strip list by id, then reads the state again', async () => {

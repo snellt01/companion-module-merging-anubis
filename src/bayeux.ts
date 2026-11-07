@@ -45,6 +45,8 @@ export class BayeuxListener {
 	private interval = 0
 	private cookie = ''
 	private readonly abort = new AbortController()
+	// The last publish queued; the next waits for it
+	private publishing: Promise<void> = Promise.resolve()
 
 	constructor(
 		private readonly baseUrl: string,
@@ -134,10 +136,18 @@ export class BayeuxListener {
 	/**
 	 * Publish one write from the fixed list and wait for the server to
 	 * acknowledge it. Over long-polling a publish is POSTed to /cometd itself;
-	 * anything else in the reply is delivered as usual.
+	 * anything else in the reply is delivered as usual. Publishes go one at
+	 * a time, in order, beside the long poll, as the web UI's client sends
+	 * them: the Anubis closes connections when several arrive at once.
 	 */
 	async publish(data: { path: string; value: JsonObject }): Promise<void> {
 		if (!isAllowedWrite(data)) throw new Error(`refusing to publish ${JSON.stringify(data)}`)
+		const sent = this.publishing.then(async () => this.publishNow(data))
+		this.publishing = sent.catch(() => undefined)
+		return sent
+	}
+
+	private async publishNow(data: { path: string; value: JsonObject }): Promise<void> {
 		if (!this.clientId || this.stopped) throw new BayeuxError('not connected')
 		const body: BayeuxMessage = {
 			channel: SETTINGS_CHANNEL,
