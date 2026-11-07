@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { AnubisConnection, type AnubisEvents } from '../anubis.js'
 import { BayeuxListener } from '../bayeux.js'
 import { AnubisModel } from '../model.js'
-import { stripMute } from '../writes.js'
+import { stripFader, stripMute } from '../writes.js'
 import { FakeAnubis, fixtureState } from './fake-anubis.js'
 
 const SEND = (strip: number, bus: number) =>
@@ -85,6 +85,19 @@ describe('AnubisConnection against a pretend Anubis', () => {
 		expect(await connection.write(stripMute(latest!, 1200, 0, 'on')!)).toBe(true)
 		expect(fake.published).toHaveLength(1)
 		expect(latest?.strip(1201)?.sends.get(0)?.mute).toBe(true)
+	})
+
+	it('sends a run of fader moves as the first and the latest', async () => {
+		for (const gain of [-100, -200, -300]) fake.expect(SEND(1210, 0), { gain })
+		connection = new AnubisConnection({ url, retryMs: 50 }, events)
+		connection.start()
+		await waitFor(() => loads === 1)
+		const results = await Promise.all(
+			[-10, -20, -30].map(async (db) => connection!.write(stripFader(latest!, 1210, 0, { to: db })!)),
+		)
+		expect(results).toEqual([true, null, true])
+		expect(fake.published.map((c) => c.value)).toEqual([{ gain: -100 }, { gain: -300 }])
+		expect(latest?.strip(1210)?.sends.get(0)?.faderGain).toBe(-300)
 	})
 
 	it("reports a write that doesn't come back", async () => {

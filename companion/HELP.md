@@ -5,8 +5,9 @@ mixer faders, mutes, solos and pan, bus master, mute, dim and mono, and
 the preamps. Buttons show the Anubis's current state, whether a change
 was made in Companion, on the unit, in its web UI or over OSC.
 
-**This version can only mute and solo strips.** It shows the whole
-state; the other actions that change things come in later versions.
+**This version can only mute, solo and move the faders of strips.** It
+shows the whole state; the other actions that change things come in
+later versions.
 
 ### Configuration
 
@@ -28,7 +29,8 @@ state; the other actions that change things come in later versions.
 Numbers in the names are the Anubis's own ids (MIC 1 is 1000, MIC 2 is
 1001, the MIXER bus is 0); the variables list shows which is which.
 
-- `strip_<id>_name`, `_gain` (dB on MIXER, `-inf` when off), `_mute`,
+- `strip_<id>_name`, `_gain` (fader on MIXER in dB, `-inf` when off; a
+  linked pair shows its shared fader, as the Anubis does), `_mute`,
   `_solo`, `_pan` (-100 left to 100 right)
 - `bus_<id>_name`, `_gain` (master, dB), `_mute`, `_dim`, `_mono`
 - `preamp_<id>_mode`, `_gain` (dB), `_48v`, `_pad`, `_lift` (where the
@@ -45,6 +47,16 @@ Numbers in the names are the Anubis's own ids (MIC 1 is 1000, MIC 2 is
   collapsed, and not while the strip's input is disconnected. When one
   is refused, the log says why. A strip change on MIXER also changes
   MIXER-ALT and CUE1 (the Anubis does this itself).
+- **Strip: fader level**: sets a strip's fader on a bus to a level in dB,
+  from -144.5 (-inf) to +6. Like the Anubis's own level entry, it keeps
+  whole tenths of a dB and anything outside the range goes to the end.
+- **Strip: fader up or down**: moves a strip's fader by a number of dB
+  (negative moves it down), stopping at -inf and +6 dB. From -inf, +1 dB
+  goes to -143.5 dB, the bottom of the scale.
+- The fader actions work on music, DAW and effect return strips (the
+  others have no fader on the Anubis), on any bus the strip is shown on.
+  A linked pair moves together, as its shared fader does. Several moves
+  within 50 ms send only the last.
 - **Read the Anubis state again**: reads everything again. Sends nothing
   to the mixer.
 

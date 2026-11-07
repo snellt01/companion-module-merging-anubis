@@ -22,9 +22,33 @@ describe('AnubisModel', () => {
 		expect(avio).toMatchObject({ name: 'Stream-L', partnerId: 1201, isPairLeader: true, connected: true })
 		expect(strips.find((s) => s.id === 1201)).toMatchObject({ partnerId: 1200, isPairLeader: false })
 		expect(strips.find((s) => s.id === 1000)).toMatchObject({ partnerId: null, isPairLeader: false })
-		expect(avio?.sends.get(0)).toEqual({ bus: 0, gain: -165, pan: -100, mute: false, solo: false, visible: true })
-		expect(avio).toMatchObject({ type: 1, groupId: -1, hasMuteSolo: true })
-		expect(strips.find((s) => s.id === 4)).toMatchObject({ name: 'CUE1-L', type: 6, hasMuteSolo: false })
+		expect(avio?.sends.get(0)).toEqual({
+			bus: 0,
+			gain: -165,
+			faderGain: -165,
+			pan: -100,
+			mute: false,
+			solo: false,
+			visible: true,
+		})
+		expect(avio).toMatchObject({ type: 1, groupId: -1, hasMuteSolo: true, hasFader: true })
+		expect(strips.find((s) => s.id === 4)).toMatchObject({
+			name: 'CUE1-L',
+			type: 6,
+			hasMuteSolo: false,
+			hasFader: false,
+		})
+	})
+
+	it("shows a collapsed pair's fader as link_gain, which can differ from its own gain", () => {
+		const tree = fixtureState()
+		applyChange(tree, `$._oem_ui_process_engine.music.mixer.strips[?(@.id==1200)][0].sends[?(@.id==0)][0]`, {
+			gain: -170,
+			link_gain: -120,
+		})
+		const send = new AnubisModel(tree).strip(1200)?.sends.get(0)
+		expect(send).toMatchObject({ gain: -170, faderGain: -120 })
+		expect(new AnubisModel(tree).strip(1210)?.sends.get(0)?.faderGain).toBe(0)
 	})
 
 	it('follows on-screen order when strips move', () => {

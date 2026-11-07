@@ -13,7 +13,10 @@ export const GAIN_MAX = 60
 
 export interface Send {
 	bus: number
+	/** This strip's own level */
 	gain: number
+	/** What its fader shows: `link_gain` for a collapsed linked pair (whose two sides can differ), else `gain` */
+	faderGain: number
 	pan: number
 	mute: boolean
 	solo: boolean
@@ -24,6 +27,8 @@ export interface Send {
 // Strip types (`strips[].type`) the web UI gives no mute or solo buttons:
 // talk mics (local, peered) get none, cue returns get M > C, TALK, C > M.
 const NO_MUTE_SOLO_TYPES = new Set([2, 3, 6])
+// Strip types the web UI draws a fader on: music input, DAW input, effect return.
+const FADER_TYPES = new Set([1, 4, 7])
 
 export interface Strip {
 	id: number
@@ -33,6 +38,8 @@ export interface Strip {
 	groupId: number
 	/** The web UI shows mute and solo buttons on strips of this type */
 	hasMuteSolo: boolean
+	/** The web UI shows a fader on strips of this type */
+	hasFader: boolean
 	/** For a linked pair shown as one strip: the other strip's id */
 	partnerId: number | null
 	/** Shown as one strip with its partner, and this is the one shown (the lower id, as in the web UI) */
@@ -140,6 +147,7 @@ export class AnubisModel {
 				type,
 				groupId: num(s.group_id, -1),
 				hasMuteSolo: !NO_MUTE_SOLO_TYPES.has(type),
+				hasFader: FADER_TYPES.has(type),
 				partnerId,
 				isPairLeader: partnerId !== null && id < partnerId,
 				collapsedLink,
@@ -148,11 +156,13 @@ export class AnubisModel {
 					arr(s.sends).map((raw) => {
 						const send = obj(raw)
 						const bus = num(send.id, -1)
+						const gain = num(send.gain, GAIN_MIN)
 						return [
 							bus,
 							{
 								bus,
-								gain: num(send.gain, GAIN_MIN),
+								gain,
+								faderGain: collapsedLink ? num(send.link_gain, gain) : gain,
 								pan: num(send.pan),
 								mute: bool(send.mute),
 								solo: bool(send.solo),

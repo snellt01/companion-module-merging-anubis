@@ -54,7 +54,7 @@ export function variableValues(model: AnubisModel): CompanionVariableValues {
 	for (const s of model.strips()) {
 		const send = s.sends.get(MIXER_BUS)
 		values[`strip_${s.id}_name`] = s.name
-		values[`strip_${s.id}_gain`] = send ? formatGain(send.gain) : ''
+		values[`strip_${s.id}_gain`] = send ? formatGain(send.faderGain) : ''
 		values[`strip_${s.id}_mute`] = send?.mute ?? false
 		values[`strip_${s.id}_solo`] = send?.solo ?? false
 		values[`strip_${s.id}_pan`] = send?.pan ?? 0
