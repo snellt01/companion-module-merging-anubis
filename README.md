@@ -16,7 +16,7 @@ feedbacks, controls the mixer's strips (mute, solo, fader, pan), buses
 (master, mute, dim, mono, ref, SoundID profile), talkback (talk to a cue
 bus, talk to all, source) and preamps (input type, gain, 48 V,
 pad/boost, phase, low cut, cut, lock), and offers presets. Every action
-but SoundID has been tested on a real Anubis (firmware `2.0.0-RL-26Q2-20260605.2`,
+has been tested on a real Anubis (firmware `2.0.0-RL-26Q2-20260605.2`,
 Music mission), from the module and from Companion buttons. Started from
 Bitfocus's `companion-module-template-ts` (commit `e0d42b7`).
 
@@ -89,8 +89,8 @@ package versions at least three days old.
       to all, source): all worked; several publishes at once made the
       unit close a connection, so publishes now go one at a time.
 - [ ] Check what the unit's own talk button reports.
-- [ ] Test SoundID on a real unit (on, switch profile, off), and check
-      what comes back (`soundid_profile`, the EQ count).
+- [x] Test SoundID on a real unit (on, switch profile, off): each came
+      back, with the EQ count taking and freeing 10.
 - [ ] An "input disconnected" feedback (mute, solo and pan are refused
       while an input is disconnected).
 - [ ] An identify action.
