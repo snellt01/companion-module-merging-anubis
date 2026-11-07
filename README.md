@@ -80,9 +80,9 @@ package versions at least three days old.
 
 ## To do
 
-- [ ] Watch linking, unlinking and expanding a pair on a real unit (the
-      module's handling is tested against the pretend Anubis and follows
-      the web UI's code).
+- [x] Watch linking, unlinking, expanding and collapsing a pair on a real
+      unit: the module followed each change (replayed through its code),
+      and the tests use the messages the unit sent.
 - [ ] An "input disconnected" feedback (mute, solo and pan are refused
       while an input is disconnected).
 - [ ] An identify action.

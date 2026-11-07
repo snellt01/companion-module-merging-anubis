@@ -1,7 +1,11 @@
 // What happens when strips are linked or unlinked on the Anubis while
 // buttons are set up: the web UI sends `_link_with_left` / `_unlink` /
-// `collapsed_link` (layout writes the module never sends), and the Anubis
-// pushes the inputs' new `linked_input_id` and `collapsed_link`.
+// `collapsed_link` (layout writes the module never sends). On a link or
+// unlink a real unit pushes every input's `linked_input_id`, `hard_link`
+// and `collapsed_link` (an unlinked strip keeps `collapsed_link: true`),
+// then the strips' sends: with `link_*` after a link, without after an
+// unlink (merged, so the old `link_*` stay). Expanding or collapsing a
+// pair pushes only the two inputs' `collapsed_link`.
 
 import { afterEach, describe, expect, it } from 'vitest'
 import { AnubisConnection } from '../anubis.js'
@@ -22,12 +26,14 @@ function withChanges(changes: [string, Json][]): AnubisModel {
 	return new AnubisModel(tree)
 }
 const unlinkAvio: [string, Json][] = [
-	[INPUT(1200), { linked_input_id: -1, collapsed_link: false, _link_changed: true }],
-	[INPUT(1201), { linked_input_id: -1, collapsed_link: false, _link_changed: true }],
+	[INPUT(1200), { linked_input_id: -1, hard_link: false, collapsed_link: true, _link_with_right: false }],
+	[INPUT(1201), { linked_input_id: -1, hard_link: false, collapsed_link: true, _link_with_left: false }],
+	[INPUT(1200), { _link_changed: true }],
 ]
 const linkMics: [string, Json][] = [
-	[INPUT(1000), { linked_input_id: 1001, collapsed_link: true, _link_changed: true }],
-	[INPUT(1001), { linked_input_id: 1000, collapsed_link: true, _link_changed: true }],
+	[INPUT(1000), { linked_input_id: 1001, hard_link: false, collapsed_link: true, _unlink: false }],
+	[INPUT(1001), { linked_input_id: 1000, hard_link: false, collapsed_link: true, _unlink: false }],
+	[INPUT(1000), { _link_changed: true }],
 ]
 
 describe('a linked pair is unlinked', () => {
