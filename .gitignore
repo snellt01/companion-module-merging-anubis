@@ -1,0 +1,11 @@
+node_modules/
+package-lock.json
+/pkg
+/*.tgz
+/dist
+DEBUG-*
+/.yarn
+/.vscode
+
+# Site-specific notes, kept out of git
+CLAUDE.local.md

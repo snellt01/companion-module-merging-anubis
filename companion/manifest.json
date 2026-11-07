@@ -1,0 +1,28 @@
+{
+	"$schema": "../node_modules/@companion-module/base/assets/manifest.schema.json",
+	"type": "connection",
+	"id": "merging-anubis",
+	"name": "Merging Anubis",
+	"shortname": "anubis",
+	"description": "Mixer and preamp control for the Merging Anubis (Music mission) through its web API",
+	"version": "0.0.0",
+	"license": "MIT",
+	"repository": "git+https://github.com/snellt01/companion-module-merging-anubis.git",
+	"bugs": "https://github.com/snellt01/companion-module-merging-anubis/issues",
+	"maintainers": [
+		{
+			"name": "Tom Snell",
+			"github": "snellt01"
+		}
+	],
+	"runtime": {
+		"type": "node26",
+		"api": "nodejs-ipc",
+		"apiVersion": "0.0.0",
+		"entrypoint": "../dist/main.js"
+	},
+	"legacyIds": [],
+	"manufacturer": "Merging Technologies",
+	"products": ["Anubis"],
+	"keywords": ["audio", "mixer", "monitor controller", "ravenna", "aes67"]
+}
