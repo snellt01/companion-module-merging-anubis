@@ -27,11 +27,12 @@ See [HELP.md](./companion/HELP.md) for users and [LICENSE](./LICENSE)
 
 | File                                                                       | Does                                                                                                                                                                                                                                                                                               |
 | -------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/bayeux.ts`                                                            | CometD client over long-polling. Sends the protocol's join, poll and leave messages, and publishes writes on `/service/ravenna/settings` only if they pass `writes.ts`'s allowlist                                                                                                                 |
+| `src/bayeux.ts`                                                            | CometD client over long-polling. Sends the protocol's join, poll and leave messages, and publishes writes on `/service/ravenna/settings` only if they pass `writes.ts`'s allowlist, one at a time beside the long poll                                                                             |
 | `src/writes.ts`                                                            | The fixed list of writes, each built as the web UI builds it after checking the target exists and the web UI would allow it; plus the allowlist of paths and fields checked before publishing                                                                                                      |
 | `src/anubis.ts`                                                            | Joins the feed, reads the whole state with one `GET /API/get_device_status:$`, then applies each `{path, value}` change pushed on `/ravenna/settings`. Starts again after 5 s if anything fails. Sends writes (one per control every 50 ms, latest wins) and waits up to 2 s for them to come back |
 | `src/tree.ts`                                                              | Applies a change to the stored state: the three path forms the Anubis uses. Lists kept by id (strips, sends, inputs, buses) merge by id, as the Anubis sends only the items that changed; when such a list adds or leaves out items, `anubis.ts` reads the whole state again a second later        |
 | `src/model.ts`                                                             | Strips (in on-screen order, linked pairs), buses and preamps, by the Anubis's own ids                                                                                                                                                                                                              |
+| `src/talkback.ts`                                                          | What a TALK key sends on press and release: a tap latches, a hold talks only while held                                                                                                                                                                                                            |
 | `src/variables.ts`, `src/feedbacks.ts`, `src/actions.ts`, `src/presets.ts` | What Companion shows and offers: variables, feedbacks, actions (each built through `writes.ts`) and ready-made buttons                                                                                                                                                                             |
 | `src/__tests__/`                                                           | Tests, with a pretend Anubis (`fake-anubis.ts`) serving a trimmed, anonymised copy of the real state                                                                                                                                                                                               |
 
@@ -84,8 +85,10 @@ package versions at least three days old.
 - [x] Watch linking, unlinking, expanding and collapsing a pair on a real
       unit: the module followed each change (replayed through its code),
       and the tests use the messages the unit sent.
-- [ ] Test the talkback actions on a real unit (talk to a cue bus, talk
-      to all, source), and check what a talk button on the unit reports.
+- [x] Test the talkback actions on a real unit (talk to a cue bus, talk
+      to all, source): all worked; several publishes at once made the
+      unit close a connection, so publishes now go one at a time.
+- [ ] Check what the unit's own talk button reports.
 - [ ] An "input disconnected" feedback (mute, solo and pan are refused
       while an input is disconnected).
 - [ ] An identify action.

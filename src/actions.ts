@@ -22,6 +22,7 @@ import {
 	talkToAll,
 	talkToCue,
 } from './writes.js'
+import { DEFAULT_HOLD_MS, type TalkEvent } from './talkback.js'
 
 type StripButtonOptions = { strip: number; bus: number; set: OnOff }
 type StripLevelOptions = { strip: number; bus: number; db: number }
@@ -55,7 +56,11 @@ export type ActionsSchema = {
 	talk_cue: { options: BusButtonOptions }
 	talk_all: { options: { set: OnOff } }
 	talk_input: { options: { strip: number } }
+	talk_cue_button: { options: { bus: number } & TalkButtonOptions }
+	talk_all_button: { options: TalkButtonOptions }
 }
+
+type TalkButtonOptions = { event: TalkEvent; hold: number }
 
 type PreampSwitchOptions = { preamp: number; set: OnOff }
 
@@ -69,6 +74,23 @@ const ON_OFF: DropdownChoice<OnOff>[] = [
 	{ id: 'toggle', label: 'Toggle' },
 	{ id: 'on', label: 'On' },
 	{ id: 'off', label: 'Off' },
+]
+
+const TALK_EVENTS: DropdownChoice<TalkEvent>[] = [
+	{ id: 'press', label: 'Pressed' },
+	{ id: 'release', label: 'Released' },
+]
+
+const TALK_BUTTON = [
+	{ type: 'dropdown', id: 'event', label: 'Key', choices: TALK_EVENTS, default: 'press' } as const,
+	{
+		type: 'number',
+		id: 'hold',
+		label: 'Held at least this long, talk only while held (ms)',
+		default: DEFAULT_HOLD_MS,
+		min: 100,
+		max: 5000,
+	} as const,
 ]
 
 const LEVEL = { label: 'Level (dB)', default: 0, min: -144.5, max: 6 }
@@ -332,6 +354,35 @@ export function UpdateActions(self: ModuleInstance): void {
 			options: [onOffOption('Talk')],
 			callback: async ({ options: o }) => {
 				await self.write((m) => talkToAll(m, o.set), { together: true })
+			},
+		},
+		talk_cue_button: {
+			name: 'Talkback: TALK key for a cue bus (tap or hold)',
+			description:
+				'Use when pressed and again when released. A tap turns talkback on, or off when it is on; held, it talks until the key is let go',
+			options: [busOption(talkBusses), ...TALK_BUTTON],
+			callback: async ({ options: o }) => {
+				const busId = Number(o.bus)
+				await self.write((m) => {
+					const set = self.talkButtons.handle(`bus ${busId}`, o.event, m.bus(busId)?.talking ?? false, o.hold)
+					return set ? talkToCue(m, busId, set) : null
+				})
+			},
+		},
+		talk_all_button: {
+			name: 'Talkback: TALK ALL key (tap or hold)',
+			description:
+				'Use when pressed and again when released. A tap turns talkback to every cue bus on, or all off when any is on; held, it talks until the key is let go',
+			options: [...TALK_BUTTON],
+			callback: async ({ options: o }) => {
+				await self.write(
+					(m) => {
+						const talking = m.busses().some((b) => b.type === 2 && b.talking)
+						const set = self.talkButtons.handle('all', o.event, talking, o.hold)
+						return set ? talkToAll(m, set) : null
+					},
+					{ together: true },
+				)
 			},
 		},
 		talk_input: {

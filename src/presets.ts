@@ -8,6 +8,7 @@ import type { CompanionButtonStyleProps } from '@companion-module/base'
 import { BLACK, BLUE, busChoices, ORANGE, RED, stripChoices, WHITE, YELLOW } from './feedbacks.js'
 import type ModuleInstance from './main.js'
 import type { ModuleSchema } from './main.js'
+import { DEFAULT_HOLD_MS } from './talkback.js'
 
 const MIXER_BUS = 0
 
@@ -131,20 +132,20 @@ export function UpdatePresets(self: ModuleInstance): void {
 	}
 	sections.push({ id: 'preamps', name: 'Preamps', definitions: preamps })
 
-	// Talkback: talk while held, to each cue bus with a TALK button and to
-	// all of them; and the talkback's source
+	// Talkback: a tap latches, a hold talks while held; to each cue bus with
+	// a TALK button and to all of them; and the talkback's source
 	const talk: string[] = []
 	for (const { id, label } of busChoices(model)) {
 		if (!model.bus(id)?.hasTalk) continue
 		const options = { bus: id }
 		presets[`talk_cue_${id}`] = {
 			type: 'simple',
-			name: `Talk to ${label} (while held)`,
+			name: `Talk to ${label} (tap to latch, hold to talk)`,
 			style: style(`TALK\n${label}`),
 			steps: [
 				{
-					down: [{ actionId: 'talk_cue', options: { ...options, set: 'on' } }],
-					up: [{ actionId: 'talk_cue', options: { ...options, set: 'off' } }],
+					down: [{ actionId: 'talk_cue_button', options: { ...options, event: 'press', hold: DEFAULT_HOLD_MS } }],
+					up: [{ actionId: 'talk_cue_button', options: { ...options, event: 'release', hold: DEFAULT_HOLD_MS } }],
 				},
 			],
 			feedbacks: [{ feedbackId: 'talk_cue', options, style: { bgcolor: ORANGE, color: BLACK } }],
@@ -154,12 +155,12 @@ export function UpdatePresets(self: ModuleInstance): void {
 	if (talk.length > 0) {
 		presets.talk_all = {
 			type: 'simple',
-			name: 'Talk to all cue buses (while held)',
+			name: 'Talk to all cue buses (tap to latch, hold to talk)',
 			style: style('TALK\nALL'),
 			steps: [
 				{
-					down: [{ actionId: 'talk_all', options: { set: 'on' } }],
-					up: [{ actionId: 'talk_all', options: { set: 'off' } }],
+					down: [{ actionId: 'talk_all_button', options: { event: 'press', hold: DEFAULT_HOLD_MS } }],
+					up: [{ actionId: 'talk_all_button', options: { event: 'release', hold: DEFAULT_HOLD_MS } }],
 				},
 			],
 			feedbacks: [{ feedbackId: 'talk_any', options: {}, style: { bgcolor: ORANGE, color: BLACK } }],

@@ -6,6 +6,7 @@ import { UpdateActions, type ActionsSchema } from './actions.js'
 import { busChoices, preampChoices, stripChoices, UpdateFeedbacks, type FeedbacksSchema } from './feedbacks.js'
 import { UpdatePresets } from './presets.js'
 import { AnubisConnection } from './anubis.js'
+import { TalkButtons } from './talkback.js'
 import { type AnubisModel, MUSIC_MISSION, TESTED_FIRMWARE } from './model.js'
 import type { Write } from './writes.js'
 
@@ -22,6 +23,7 @@ export { UpgradeScripts }
 export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 	config!: ModuleConfig // Setup in init()
 	anubis: AnubisConnection | null = null
+	readonly talkButtons = new TalkButtons()
 	// What the variable and feedback definitions were last built from
 	private definitionsKey = ''
 	private lastValues = new Map<string, string>()
@@ -78,7 +80,8 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 	 * and low cut) from the current state and send it, in order. Anything
 	 * refused, unacknowledged or not reported back is logged as a warning,
 	 * and stops the rest of a sequence. With `together`, the writes (to
-	 * different controls) go out at once, as the web UI sends TALK ALL.
+	 * different controls) go out back to back without waiting for each to
+	 * come back, as the web UI sends TALK ALL.
 	 */
 	async write(build: (model: AnubisModel) => Write | Write[] | null, { together = false } = {}): Promise<void> {
 		const anubis = this.anubis

@@ -4,6 +4,7 @@ import { UpdateFeedbacks } from '../feedbacks.js'
 import type ModuleInstance from '../main.js'
 import { AnubisModel } from '../model.js'
 import { UpdatePresets } from '../presets.js'
+import { TalkButtons } from '../talkback.js'
 import { fixtureState } from './fake-anubis.js'
 
 type Captured = { sections: { id: string; definitions: string[] }[]; presets: Record<string, any> }
@@ -23,6 +24,7 @@ function build(): {
 	const self = {
 		label: 'anubis',
 		anubis: { model },
+		talkButtons: new TalkButtons(),
 		setPresetDefinitions: (sections: Captured['sections'], presets: Captured['presets']) => {
 			captured.sections = sections
 			captured.presets = presets
@@ -54,8 +56,8 @@ describe('presets', () => {
 		expect(ids).not.toContain('talk_cue_2') // CUE1 follows the mix: no TALK button
 		expect(ids).not.toContain('talk_input_4') // a cue return can't be the talk input
 		expect(captured.presets.talk_cue_3.steps[0]).toMatchObject({
-			down: [{ actionId: 'talk_cue', options: { bus: 3, set: 'on' } }],
-			up: [{ actionId: 'talk_cue', options: { bus: 3, set: 'off' } }],
+			down: [{ actionId: 'talk_cue_button', options: { bus: 3, event: 'press' } }],
+			up: [{ actionId: 'talk_cue_button', options: { bus: 3, event: 'release' } }],
 		})
 		expect(captured.presets.strip_mute_1200.style.text).toBe('Stream-L + Stream-R\nMUTE')
 		expect(captured.presets.strip_fader_up_1000.style.text).toContain('$(anubis:strip_1000_gain)')

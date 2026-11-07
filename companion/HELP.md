@@ -110,6 +110,12 @@ Numbers in the names are the Anubis's own ids (MIC 1 is 1000, MIC 2 is
   following the mix). For a button that talks while held, use On when
   pressed and Off when released, as the presets do; On and Off are
   always sent, so a quick tap can't leave talkback on.
+- **Talkback: TALK key for a cue bus (tap or hold)** and **Talkback:
+  TALK ALL key (tap or hold)**: put one on the key's press with Key set to
+  Pressed and one on its release with Key set to Released, as the presets
+  do. A tap turns talkback on and leaves it on; a tap while it's on turns
+  it off. Held for at least the set time (500 ms by default), it talks
+  only until the key is let go.
 - **Talkback: talk to all cue buses**: TALK ALL, to every cue bus with
   its own mix. Toggle turns them all off if talkback to any cue bus is
   on, otherwise all on, as on the Anubis.
@@ -130,9 +136,9 @@ strips, buses and preamps:
   cue bus following the mix.
 - **Preamps**: 48 V, phase, low cut, cut and lock (where the preamp has
   them) and gain up / down 1 dB showing the gain.
-- **Talkback**: TALK for each cue bus with a TALK button and TALK ALL,
-  talking while held; and a source button for each strip that can be the
-  talkback's input.
+- **Talkback**: TALK for each cue bus with a TALK button and TALK ALL
+  (tap to latch, hold to talk while held); and a source button for each
+  strip that can be the talkback's input.
 
 Each lights up with the state, whatever changed it. After placing one,
 its strip or bus can be changed in the button's action and feedback.
