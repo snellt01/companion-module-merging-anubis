@@ -53,11 +53,22 @@ export interface Strip {
 export interface Bus {
 	id: number
 	name: string
+	/** 1 monitor, 2 cue, 3 effect, 4 insert (send) */
+	type: number
 	masterGain: number
 	mute: boolean
 	dim: boolean
 	mono: boolean
 	hasSolo: boolean
+	/** At its reference level */
+	ref: boolean
+	/**
+	 * A monitor bus, or a cue bus following the mix (cue mode 1): the web
+	 * UI gives these Dim and Mono buttons, and pan on them is never linked
+	 */
+	monitors: boolean
+	/** Strip pan can be changed on this bus (it isn't linked to the mix's) */
+	panEditable: boolean
 }
 
 export const INPUT_MODES = ['Mic', 'Line', 'Instrument'] as const
@@ -196,15 +207,23 @@ export class AnubisModel {
 		return arr(this.mixer.busses)
 			.map(obj)
 			.filter((b) => b.enabled !== false)
-			.map((b) => ({
-				id: num(b.id, -1),
-				name: str(b.name),
-				masterGain: num(b.master_gain, GAIN_MIN),
-				mute: bool(b.mute),
-				dim: bool(b.dim),
-				mono: bool(b.downmix),
-				hasSolo: bool(b.has_solo),
-			}))
+			.map((b) => {
+				const type = num(b.type, -1)
+				const monitors = type === 1 || (type === 2 && num(b.cue_mode, -1) === 1)
+				return {
+					id: num(b.id, -1),
+					name: str(b.name),
+					type,
+					masterGain: num(b.master_gain, GAIN_MIN),
+					mute: bool(b.mute),
+					dim: bool(b.dim),
+					mono: bool(b.downmix),
+					hasSolo: bool(b.has_solo),
+					ref: bool(b.ref),
+					monitors,
+					panEditable: monitors || !bool(b.pan_linked),
+				}
+			})
 	}
 
 	bus(id: number): Bus | undefined {

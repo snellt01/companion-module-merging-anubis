@@ -33,10 +33,19 @@ export type OnOff = 'toggle' | 'on' | 'off'
 
 const SEND_PATH =
 	/^\$\._oem_ui_process_engine\.music\.mixer\.strips\[\?\(@\.id==\d+\)\]\[0\]\.sends\[\?\(@\.id==\d+\)\]\[0\]$/
+const BUS_PATH = /^\$\._oem_ui_process_engine\.music\.mixer\.busses\[\?\(@\.id==\d+\)\]\[0\]$/
+
+export const PAN_MIN = -100
+export const PAN_MAX = 100
 
 type FieldCheck = (value: Json) => boolean
 const isBool: FieldCheck = (v) => typeof v === 'boolean'
-const isLevel: FieldCheck = (v) => Number.isInteger(v) && (v as number) >= GAIN_MIN && (v as number) <= GAIN_MAX
+const isTrue: FieldCheck = (v) => v === true
+const isIntIn =
+	(min: number, max: number): FieldCheck =>
+	(v) =>
+		Number.isInteger(v) && (v as number) >= min && (v as number) <= max
+const isLevel = isIntIn(GAIN_MIN, GAIN_MAX)
 
 // Every path and field a write may carry, checked again just before it is
 // sent: one field, of the right type and range.
@@ -50,6 +59,18 @@ const ALLOWED: { path: RegExp; fields: Record<string, FieldCheck> }[] = [
 			link_solo: isBool,
 			gain: isLevel,
 			link_gain: isLevel,
+			pan: isIntIn(PAN_MIN, PAN_MAX),
+		},
+	},
+	{
+		path: BUS_PATH,
+		fields: {
+			master_gain: isLevel,
+			mute: isBool,
+			dim: isBool,
+			downmix: isBool,
+			// The web UI only ever sends ref: true
+			ref: isTrue,
 		},
 	},
 ]
@@ -71,6 +92,10 @@ function id(value: number, what: string): number {
 
 function sendPath(strip: number, bus: number): string {
 	return `${MIXER_PATH}.strips[?(@.id==${strip})][0].sends[?(@.id==${bus})][0]`
+}
+
+function busPath(bus: number): string {
+	return `${MIXER_PATH}.busses[?(@.id==${bus})][0]`
 }
 
 /**
@@ -191,5 +216,97 @@ export function stripFader(model: AnubisModel, stripId: number, busId: number, c
 		path: sendPath(stripId, busId),
 		value: { [pair ? 'link_gain' : 'gain']: gain },
 		confirmed: (m) => m.strip(stripId)?.sends.get(busId)?.faderGain === gain,
+	}
+}
+
+export type PanChange = { to: number } | { by: number }
+
+/**
+ * Pan a strip on one bus, to a position or by a step, as the web UI's pan
+ * control does: whole numbers from −100 (left) to 100 (right). The web UI
+ * has no pan for a linked pair shown as one strip, disables pan on a bus
+ * whose pan is linked to the mix (all but the monitor buses and a cue bus
+ * following the mix), and while the strip's input isn't connected. The
+ * Anubis applies a pan to every bus whose pan is linked.
+ */
+export function stripPan(model: AnubisModel, stripId: number, busId: number, change: PanChange): Write | null {
+	const { strip, bus, send, where } = shownSend(model, stripId, busId, 'pan', () => true)
+	if (strip.collapsedLink) throw new WriteRefused(`${strip.name} is a linked pair, which has no pan`)
+	if (!bus.panEditable) throw new WriteRefused(`${where}: pan on ${bus.name} is linked to the mix`)
+	if (!strip.connected) throw new WriteRefused(`${where}: its input isn't connected, so pan is off`)
+	const requested = 'to' in change ? change.to : send.pan + change.by
+	if (!Number.isFinite(requested)) throw new WriteRefused(`${String(requested)} isn't a pan position`)
+	const pan = Math.min(PAN_MAX, Math.max(PAN_MIN, Math.trunc(requested) || 0))
+	if (pan === send.pan) return null
+	return {
+		description: `Pan ${strip.name} on ${bus.name} to ${pan}`,
+		control: `strip ${stripId} bus ${busId} pan`,
+		path: sendPath(stripId, busId),
+		value: { pan },
+		confirmed: (m) => m.strip(stripId)?.sends.get(busId)?.pan === pan,
+	}
+}
+
+function existingBus(model: AnubisModel, busId: number): Bus {
+	id(busId, 'bus')
+	const bus = model.bus(busId)
+	if (!bus) throw new WriteRefused(`There is no bus ${busId} in the mixer`)
+	return bus
+}
+
+/** Move a bus's master fader, to a level or by a step (in dB), as the web UI's master fader does */
+export function busMaster(model: AnubisModel, busId: number, change: LevelChange): Write | null {
+	const bus = existingBus(model, busId)
+	const gain = 'to' in change ? levelFromDb(change.to) : clampLevel(bus.masterGain + levelStep(change.by))
+	if (gain === bus.masterGain) return null
+	return {
+		description: `${bus.name} master to ${formatGain(gain)} dB`,
+		control: `bus ${busId} master_gain`,
+		path: busPath(busId),
+		value: { master_gain: gain },
+		confirmed: (m) => m.bus(busId)?.masterGain === gain,
+	}
+}
+
+type BusButton = 'mute' | 'dim' | 'mono'
+const BUS_FIELDS: Record<BusButton, string> = { mute: 'mute', dim: 'dim', mono: 'downmix' }
+const BUS_WORDS: Record<BusButton, [on: string, off: string]> = {
+	mute: ['Mute', 'Unmute'],
+	dim: ['Dim', 'Undim'],
+	mono: ['Mono', 'Stereo'],
+}
+
+/**
+ * A bus's mute, dim or mono button, as the web UI sends it. Mute is on every
+ * bus (the master level menu); Dim and Mono only on the monitor buses and a
+ * cue bus following the mix. Returns null when the bus is already in that
+ * state.
+ */
+export function busButton(model: AnubisModel, busId: number, button: BusButton, set: OnOff): Write | null {
+	const bus = existingBus(model, busId)
+	if (button !== 'mute' && !bus.monitors) throw new WriteRefused(`${bus.name} has no ${button} button`)
+	const on = set === 'toggle' ? !bus[button] : set === 'on'
+	if (on === bus[button]) return null
+	return {
+		description: `${BUS_WORDS[button][on ? 0 : 1]} ${bus.name}`,
+		control: `bus ${busId} ${button}`,
+		path: busPath(busId),
+		value: { [BUS_FIELDS[button]]: on },
+		confirmed: (m) => m.bus(busId)?.[button] === on,
+	}
+}
+
+/**
+ * Put a bus at its reference level, as double-clicking its master fader
+ * (or REF in its level menu) does. Always sends `ref: true`, as the web UI does.
+ */
+export function busRef(model: AnubisModel, busId: number): Write {
+	const bus = existingBus(model, busId)
+	return {
+		description: `${bus.name} to its reference level`,
+		control: `bus ${busId} ref`,
+		path: busPath(busId),
+		value: { ref: true },
+		confirmed: (m) => m.bus(busId)?.ref === true,
 	}
 }

@@ -134,7 +134,14 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 	}
 
 	private changed(model: AnubisModel): void {
-		const key = JSON.stringify([stripChoices(model), busChoices(model), preampChoices(model)])
+		const key = JSON.stringify([
+			stripChoices(model),
+			busChoices(model),
+			preampChoices(model),
+			// What the action lists filter on
+			model.strips().map((s) => [s.id, s.type, s.collapsedLink]),
+			model.busses().map((b) => [b.id, b.monitors, b.panEditable]),
+		])
 		if (key !== this.definitionsKey) {
 			this.definitionsKey = key
 			this.updateActions()

@@ -1,27 +1,28 @@
 import type { DropdownChoice } from '@companion-module/base'
 import type ModuleInstance from './main.js'
 import { busChoices, stripChoices } from './feedbacks.js'
-import { type OnOff, stripFader, stripMute, stripSolo } from './writes.js'
+import { busButton, busMaster, busRef, type OnOff, stripFader, stripMute, stripPan, stripSolo } from './writes.js'
 
 type StripButtonOptions = { strip: number; bus: number; set: OnOff }
 type StripLevelOptions = { strip: number; bus: number; db: number }
+type StripPanOptions = { strip: number; bus: number; pan: number }
+type BusButtonOptions = { bus: number; set: OnOff }
+type BusLevelOptions = { bus: number; db: number }
 
 export type ActionsSchema = {
-	refresh: {
-		options: Record<string, never>
-	}
-	strip_mute: {
-		options: StripButtonOptions
-	}
-	strip_solo: {
-		options: StripButtonOptions
-	}
-	strip_fader: {
-		options: StripLevelOptions
-	}
-	strip_fader_step: {
-		options: StripLevelOptions
-	}
+	refresh: { options: Record<string, never> }
+	strip_mute: { options: StripButtonOptions }
+	strip_solo: { options: StripButtonOptions }
+	strip_fader: { options: StripLevelOptions }
+	strip_fader_step: { options: StripLevelOptions }
+	strip_pan: { options: StripPanOptions }
+	strip_pan_step: { options: StripPanOptions }
+	bus_master: { options: BusLevelOptions }
+	bus_master_step: { options: BusLevelOptions }
+	bus_mute: { options: BusButtonOptions }
+	bus_dim: { options: BusButtonOptions }
+	bus_mono: { options: BusButtonOptions }
+	bus_ref: { options: { bus: number } }
 }
 
 const ON_OFF: DropdownChoice<OnOff>[] = [
@@ -30,25 +31,31 @@ const ON_OFF: DropdownChoice<OnOff>[] = [
 	{ id: 'off', label: 'Off' },
 ]
 
+const LEVEL = { label: 'Level (dB)', default: 0, min: -144.5, max: 6 }
+const LEVEL_STEP = { label: 'Step (dB)', default: 1, min: -150, max: 150 }
+
 export function UpdateActions(self: ModuleInstance): void {
 	const model = self.anubis?.model ?? null
+	const stripsWhere = (has: (id: number) => boolean | undefined) => stripChoices(model).filter((c) => has(c.id))
 	// Talk and cue return strips have no mute or solo buttons
-	const strips = stripChoices(model).filter((c) => model?.strip(c.id)?.hasMuteSolo)
+	const buttonStrips = stripsWhere((id) => model?.strip(id)?.hasMuteSolo)
 	// Talk, monitor return and cue return strips have no fader
-	const faderStrips = stripChoices(model).filter((c) => model?.strip(c.id)?.hasFader)
+	const faderStrips = stripsWhere((id) => model?.strip(id)?.hasFader)
+	// A linked pair shown as one strip has no pan
+	const panStrips = stripsWhere((id) => model?.strip(id)?.collapsedLink === false)
 	const busses = busChoices(model)
-	const stripLevelOptions = (db: { label: string; default: number; min: number; max: number }) =>
-		[
-			{ type: 'dropdown', id: 'strip', label: 'Strip', choices: faderStrips, default: faderStrips[0]?.id ?? 0 },
-			{ type: 'dropdown', id: 'bus', label: 'Bus', choices: busses, default: 0 },
-			{ type: 'number', id: 'db', step: 0.1, ...db },
-		] as const
-	const stripButtonOptions = (label: string) =>
-		[
-			{ type: 'dropdown', id: 'strip', label: 'Strip', choices: strips, default: strips[0]?.id ?? 0 },
-			{ type: 'dropdown', id: 'bus', label: 'Bus', choices: busses, default: 0 },
-			{ type: 'dropdown', id: 'set', label, choices: ON_OFF, default: 'toggle' },
-		] as const
+	const panBusses = busses.filter((b) => model?.bus(b.id)?.panEditable)
+	const monitorBusses = busses.filter((b) => model?.bus(b.id)?.monitors)
+
+	const stripOption = (choices: DropdownChoice<number>[]) =>
+		({ type: 'dropdown', id: 'strip', label: 'Strip', choices, default: choices[0]?.id ?? 0 }) as const
+	const busOption = (choices: DropdownChoice<number>[]) =>
+		({ type: 'dropdown', id: 'bus', label: 'Bus', choices, default: choices[0]?.id ?? 0 }) as const
+	const onOffOption = (label: string) =>
+		({ type: 'dropdown', id: 'set', label, choices: ON_OFF, default: 'toggle' }) as const
+	const dbOption = (db: typeof LEVEL) => ({ type: 'number', id: 'db', step: 0.1, ...db }) as const
+	const panOption = (pan: { label: string; default: number; min: number; max: number }) =>
+		({ type: 'number', id: 'pan', step: 1, ...pan }) as const
 
 	self.setActionDefinitions({
 		refresh: {
@@ -62,37 +69,106 @@ export function UpdateActions(self: ModuleInstance): void {
 		strip_mute: {
 			name: 'Strip: mute',
 			description: "Mutes or unmutes a strip on a bus, as the strip's mute button does",
-			options: [...stripButtonOptions('Mute')],
-			callback: async (action) => {
-				const { strip, bus, set } = action.options
-				await self.write((m) => stripMute(m, Number(strip), Number(bus), set))
+			options: [stripOption(buttonStrips), busOption(busses), onOffOption('Mute')],
+			callback: async ({ options: o }) => {
+				await self.write((m) => stripMute(m, Number(o.strip), Number(o.bus), o.set))
 			},
 		},
 		strip_solo: {
 			name: 'Strip: solo',
 			description: "Solos or unsolos a strip on a bus, as the strip's solo button does",
-			options: [...stripButtonOptions('Solo')],
-			callback: async (action) => {
-				const { strip, bus, set } = action.options
-				await self.write((m) => stripSolo(m, Number(strip), Number(bus), set))
+			options: [stripOption(buttonStrips), busOption(busses), onOffOption('Solo')],
+			callback: async ({ options: o }) => {
+				await self.write((m) => stripSolo(m, Number(o.strip), Number(o.bus), o.set))
 			},
 		},
 		strip_fader: {
 			name: 'Strip: fader level',
 			description: "Sets a strip's fader on a bus, in dB (-144.5 is -inf, +6 the top), as the web UI's fader does",
-			options: [...stripLevelOptions({ label: 'Level (dB)', default: 0, min: -144.5, max: 6 })],
-			callback: async (action) => {
-				const { strip, bus, db } = action.options
-				await self.write((m) => stripFader(m, Number(strip), Number(bus), { to: Number(db) }))
+			options: [stripOption(faderStrips), busOption(busses), dbOption(LEVEL)],
+			callback: async ({ options: o }) => {
+				await self.write((m) => stripFader(m, Number(o.strip), Number(o.bus), { to: Number(o.db) }))
 			},
 		},
 		strip_fader_step: {
 			name: 'Strip: fader up or down',
 			description: "Moves a strip's fader on a bus by a number of dB (negative for down), within -inf to +6 dB",
-			options: [...stripLevelOptions({ label: 'Step (dB)', default: 1, min: -150, max: 150 })],
-			callback: async (action) => {
-				const { strip, bus, db } = action.options
-				await self.write((m) => stripFader(m, Number(strip), Number(bus), { by: Number(db) }))
+			options: [stripOption(faderStrips), busOption(busses), dbOption(LEVEL_STEP)],
+			callback: async ({ options: o }) => {
+				await self.write((m) => stripFader(m, Number(o.strip), Number(o.bus), { by: Number(o.db) }))
+			},
+		},
+		strip_pan: {
+			name: 'Strip: pan',
+			description:
+				"Pans a strip, -100 (left) to 100 (right), as the web UI's pan control does. Only on buses whose pan isn't linked to the mix",
+			options: [
+				stripOption(panStrips),
+				busOption(panBusses),
+				panOption({ label: 'Pan (-100 left, 0 centre, 100 right)', default: 0, min: -100, max: 100 }),
+			],
+			callback: async ({ options: o }) => {
+				await self.write((m) => stripPan(m, Number(o.strip), Number(o.bus), { to: Number(o.pan) }))
+			},
+		},
+		strip_pan_step: {
+			name: 'Strip: pan left or right',
+			description: "Moves a strip's pan by a step (negative is to the left), within -100 to 100",
+			options: [
+				stripOption(panStrips),
+				busOption(panBusses),
+				panOption({ label: 'Step (negative is left)', default: 10, min: -200, max: 200 }),
+			],
+			callback: async ({ options: o }) => {
+				await self.write((m) => stripPan(m, Number(o.strip), Number(o.bus), { by: Number(o.pan) }))
+			},
+		},
+		bus_master: {
+			name: 'Bus: master level',
+			description: "Sets a bus's master fader, in dB (-144.5 is -inf, +6 the top)",
+			options: [busOption(busses), dbOption(LEVEL)],
+			callback: async ({ options: o }) => {
+				await self.write((m) => busMaster(m, Number(o.bus), { to: Number(o.db) }))
+			},
+		},
+		bus_master_step: {
+			name: 'Bus: master up or down',
+			description: "Moves a bus's master fader by a number of dB (negative for down), within -inf to +6 dB",
+			options: [busOption(busses), dbOption(LEVEL_STEP)],
+			callback: async ({ options: o }) => {
+				await self.write((m) => busMaster(m, Number(o.bus), { by: Number(o.db) }))
+			},
+		},
+		bus_mute: {
+			name: 'Bus: mute',
+			description: 'Mutes or unmutes a bus. The MIXER bus mute is the main mute in the web UI',
+			options: [busOption(busses), onOffOption('Mute')],
+			callback: async ({ options: o }) => {
+				await self.write((m) => busButton(m, Number(o.bus), 'mute', o.set))
+			},
+		},
+		bus_dim: {
+			name: 'Bus: dim',
+			description: 'Dims a monitor bus (MIXER, MIXER-ALT, or a cue bus following the mix)',
+			options: [busOption(monitorBusses), onOffOption('Dim')],
+			callback: async ({ options: o }) => {
+				await self.write((m) => busButton(m, Number(o.bus), 'dim', o.set))
+			},
+		},
+		bus_mono: {
+			name: 'Bus: mono',
+			description: "Switches a monitor bus to mono (the web UI's Mono button)",
+			options: [busOption(monitorBusses), onOffOption('Mono')],
+			callback: async ({ options: o }) => {
+				await self.write((m) => busButton(m, Number(o.bus), 'mono', o.set))
+			},
+		},
+		bus_ref: {
+			name: 'Bus: reference level',
+			description: "Puts a bus's master at its reference level, as double-clicking the master fader does",
+			options: [busOption(busses)],
+			callback: async ({ options: o }) => {
+				await self.write((m) => busRef(m, Number(o.bus)))
 			},
 		},
 	})

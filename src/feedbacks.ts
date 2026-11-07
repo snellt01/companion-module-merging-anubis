@@ -12,6 +12,7 @@ export type FeedbacksSchema = {
 	bus_dim: { type: 'boolean'; options: BusOptions }
 	bus_mono: { type: 'boolean'; options: BusOptions }
 	bus_solo: { type: 'boolean'; options: BusOptions }
+	bus_ref: { type: 'boolean'; options: BusOptions }
 	preamp_setting: { type: 'boolean'; options: { preamp: number; setting: PreampSetting } }
 	preamp_mode: { type: 'boolean'; options: { preamp: number; mode: number } }
 }
@@ -118,6 +119,13 @@ export function UpdateFeedbacks(self: ModuleInstance): void {
 			defaultStyle: { bgcolor: YELLOW, color: BLACK },
 			options: [...busOption],
 			callback: (fb) => bus(fb.options)?.hasSolo ?? false,
+		},
+		bus_ref: {
+			type: 'boolean',
+			name: 'Bus: at reference level',
+			defaultStyle: { bgcolor: BLUE, color: WHITE },
+			options: [...busOption],
+			callback: (fb) => bus(fb.options)?.ref ?? false,
 		},
 		preamp_setting: {
 			type: 'boolean',

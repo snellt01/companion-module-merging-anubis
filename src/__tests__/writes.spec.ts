@@ -1,7 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import { AnubisModel } from '../model.js'
 import { applyChange } from '../tree.js'
-import { isAllowedWrite, levelFromDb, stripFader, stripMute, stripSolo, WriteRefused } from '../writes.js'
+import {
+	busButton,
+	busMaster,
+	busRef,
+	isAllowedWrite,
+	levelFromDb,
+	stripFader,
+	stripMute,
+	stripPan,
+	stripSolo,
+	WriteRefused,
+} from '../writes.js'
 import { fixtureState } from './fake-anubis.js'
 
 const MIX = '$._oem_ui_process_engine.music.mixer'
@@ -148,6 +159,65 @@ describe('stripFader', () => {
 	})
 })
 
+describe('stripPan', () => {
+	it('pans in whole steps from -100 to 100, to a position or by a step', () => {
+		const write = stripPan(model(), 1210, 0, { to: -25.7 })
+		expect(write).toMatchObject({ path: SEND(1210, 0), value: { pan: -25 }, control: 'strip 1210 bus 0 pan' })
+		expect(stripPan(model(), 1210, 0, { to: 300 })?.value).toEqual({ pan: 100 })
+		expect(stripPan(model(), 1210, 1, { by: -10 })?.value).toEqual({ pan: -10 })
+		expect(stripPan(model(), 1210, 0, { to: 0 })).toBeNull()
+		expect(() => stripPan(model(), 1210, 0, { to: Number.NaN })).toThrow(WriteRefused)
+	})
+
+	it('pans only on buses whose pan isn’t linked: monitor buses and a cue bus following the mix', () => {
+		expect(stripPan(model(), 1210, 2, { to: 10 })).not.toBeNull() // CUE1, cue mode 1
+		expect(() => stripPan(model(), 1210, 3, { to: 10 })).toThrow('linked to the mix') // CUE2
+		expect(() => stripPan(model(), 1210, 7, { to: 10 })).toThrow('linked to the mix') // REVERB
+		const tree = fixtureState()
+		applyChange(tree, `${MIX}.busses[?(@.id==3)][0]`, { pan_linked: false })
+		expect(stripPan(new AnubisModel(tree), 1210, 3, { to: 10 })?.value).toEqual({ pan: 10 })
+	})
+
+	it('refuses a linked pair and a disconnected input, as the web UI does', () => {
+		expect(() => stripPan(model(), 1200, 0, { to: 0 })).toThrow('linked pair')
+		expect(() => stripPan(model(), 1201, 0, { to: 0 })).toThrow('hidden half')
+		const tree = fixtureState()
+		applyChange(tree, INPUT(1210), { connected: false })
+		expect(() => stripPan(new AnubisModel(tree), 1210, 0, { to: 10 })).toThrow("isn't connected")
+	})
+})
+
+describe('bus writes', () => {
+	const BUS = (id: number) => `${MIX}.busses[?(@.id==${id})][0]`
+
+	it('moves a master fader, to a level or by a step', () => {
+		expect(busMaster(model(), 1, { to: -20 })).toMatchObject({ path: BUS(1), value: { master_gain: -200 } })
+		expect(busMaster(model(), 1, { by: 2.5 })?.value).toEqual({ master_gain: -289 })
+		expect(busMaster(model(), 3, { by: 1 })?.value).toEqual({ master_gain: -1435 }) // CUE2 at -inf
+		expect(busMaster(model(), 0, { by: 10 })?.value).toEqual({ master_gain: 60 })
+		expect(busMaster(model(), 0, { to: 0 })).toBeNull()
+		expect(() => busMaster(model(), 12, { to: 0 })).toThrow('no bus 12')
+	})
+
+	it('mutes any bus, and sends mono as downmix', () => {
+		expect(busButton(model(), 6, 'mute', 'toggle')).toMatchObject({ path: BUS(6), value: { mute: true } })
+		expect(busButton(model(), 5, 'mute', 'on')).toBeNull() // CUE4 is muted
+		expect(busButton(model(), 0, 'mono', 'on')?.value).toEqual({ downmix: true })
+		expect(busButton(model(), 0, 'dim', 'toggle')?.description).toBe('Dim MIXER')
+	})
+
+	it('dims and monos only monitor buses and a cue bus following the mix', () => {
+		expect(busButton(model(), 2, 'dim', 'on')?.value).toEqual({ dim: true }) // CUE1, cue mode 1
+		expect(() => busButton(model(), 6, 'dim', 'on')).toThrow('no dim button')
+		expect(() => busButton(model(), 9, 'mono', 'on')).toThrow('no mono button')
+	})
+
+	it('sends ref: true, even when the bus is already at its reference level', () => {
+		expect(busRef(model(), 6)).toMatchObject({ path: BUS(6), value: { ref: true } })
+		expect(busRef(model(), 4).value).toEqual({ ref: true })
+	})
+})
+
 describe('isAllowedWrite', () => {
 	it('allows the fixed list only', () => {
 		expect(isAllowedWrite({ path: SEND(1210, 0), value: { mute: true } })).toBe(true)
@@ -165,7 +235,19 @@ describe('isAllowedWrite', () => {
 		expect(isAllowedWrite({ path: SEND(1210, 0), value: { toString: 0 } })).toBe(false)
 		expect(isAllowedWrite({ path: SEND(1210, 0), value: { mute: 1 } })).toBe(false)
 		expect(isAllowedWrite({ path: SEND(1210, 0), value: { mute: true, solo: true } })).toBe(false)
-		expect(isAllowedWrite({ path: SEND(1210, 0), value: { pan: 0 } })).toBe(false)
+		expect(isAllowedWrite({ path: SEND(1210, 0), value: { pan: 0 } })).toBe(true)
+		expect(isAllowedWrite({ path: SEND(1210, 0), value: { pan: 101 } })).toBe(false)
+		expect(isAllowedWrite({ path: SEND(1210, 0), value: { pan_linked: false } })).toBe(false)
+		const BUS = `${MIX}.busses[?(@.id==6)][0]`
+		expect(isAllowedWrite({ path: BUS, value: { master_gain: -1445 } })).toBe(true)
+		expect(isAllowedWrite({ path: BUS, value: { downmix: true } })).toBe(true)
+		expect(isAllowedWrite({ path: BUS, value: { ref: true } })).toBe(true)
+		expect(isAllowedWrite({ path: BUS, value: { ref: false } })).toBe(false)
+		expect(isAllowedWrite({ path: BUS, value: { gain: 0 } })).toBe(false)
+		expect(isAllowedWrite({ path: BUS, value: { pan_linked: false } })).toBe(false)
+		expect(isAllowedWrite({ path: BUS, value: { has_solo: false } })).toBe(false)
+		expect(isAllowedWrite({ path: BUS, value: { reset: true } })).toBe(false)
+		expect(isAllowedWrite({ path: BUS, value: { name: 'X' } })).toBe(false)
 		expect(isAllowedWrite({ path: `${SEND(1210, 0)}.x`, value: { mute: true } })).toBe(false)
 		expect(isAllowedWrite({ path: '$.identity', value: { identify: true } })).toBe(false)
 		expect(isAllowedWrite({ path: '$.network', value: { mute: true } })).toBe(false)
