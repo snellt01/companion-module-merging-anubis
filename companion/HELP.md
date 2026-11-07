@@ -5,9 +5,8 @@ mixer faders, mutes, solos and pan, bus master, mute, dim and mono, and
 the preamps. Buttons show the Anubis's current state, whether a change
 was made in Companion, on the unit, in its web UI or over OSC.
 
-**This version can only mute, solo and move the faders of strips.** It
-shows the whole state; the other actions that change things come in
-later versions.
+**This version controls the mixer's strips and buses.** Preamp actions
+come in a later version; their state is already shown.
 
 ### Configuration
 
@@ -57,6 +56,23 @@ Numbers in the names are the Anubis's own ids (MIC 1 is 1000, MIC 2 is
   others have no fader on the Anubis), on any bus the strip is shown on.
   A linked pair moves together, as its shared fader does. Several moves
   within 50 ms send only the last.
+- **Strip: pan** (to a position, -100 left to 100 right) and **Strip: pan
+  left or right** (by a step, negative is left). As on the Anubis, pan
+  can only be changed on MIXER, MIXER-ALT and a cue bus following the
+  mix: on the other buses it is linked to the mix's pan, and
+  the Anubis applies one pan change to all of them. A linked pair shown
+  as one strip has no pan, and pan is off while the input is
+  disconnected.
+- **Bus: master level** and **Bus: master up or down**: a bus's master
+  fader, in dB, like the strip fader actions.
+- **Bus: mute**: on, off or toggle, on any bus. The MIXER bus mute is the
+  main mute in the Anubis's web UI.
+- **Bus: dim** and **Bus: mono**: on, off or toggle, on MIXER, MIXER-ALT
+  and a cue bus following the mix, the buses the Anubis gives these
+  buttons.
+- **Bus: reference level**: puts a bus's master at the mixer's reference
+  level (set in the Anubis's mixer settings), as double-clicking the master fader on the Anubis
+  does.
 - **Read the Anubis state again**: reads everything again. Sends nothing
   to the mixer.
 

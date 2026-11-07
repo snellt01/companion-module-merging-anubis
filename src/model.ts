@@ -60,8 +60,6 @@ export interface Bus {
 	dim: boolean
 	mono: boolean
 	hasSolo: boolean
-	/** At its reference level */
-	ref: boolean
 	/**
 	 * A monitor bus, or a cue bus following the mix (cue mode 1): the web
 	 * UI gives these Dim and Mono buttons, and pan on them is never linked
@@ -203,6 +201,16 @@ export class AnubisModel {
 		return typeof collapsed === 'boolean' ? collapsed : null
 	}
 
+	/**
+	 * The level a bus's REF puts its master at (mixer settings, tenths of a
+	 * dB). A bus's own `ref` field is only a trigger: the Anubis resets it
+	 * without saying so, so it says nothing about the bus.
+	 */
+	get refLevel(): number | null {
+		const level = obj(this.mixer.settings).ref_level
+		return typeof level === 'number' ? level : null
+	}
+
 	busses(): Bus[] {
 		return arr(this.mixer.busses)
 			.map(obj)
@@ -219,7 +227,6 @@ export class AnubisModel {
 					dim: bool(b.dim),
 					mono: bool(b.downmix),
 					hasSolo: bool(b.has_solo),
-					ref: bool(b.ref),
 					monitors,
 					panEditable: monitors || !bool(b.pan_linked),
 				}

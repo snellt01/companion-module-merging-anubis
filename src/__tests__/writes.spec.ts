@@ -212,8 +212,16 @@ describe('bus writes', () => {
 		expect(() => busButton(model(), 9, 'mono', 'on')).toThrow('no mono button')
 	})
 
-	it('sends ref: true, even when the bus is already at its reference level', () => {
-		expect(busRef(model(), 6)).toMatchObject({ path: BUS(6), value: { ref: true } })
+	it('sends ref: true every time, and is confirmed by the master reaching ref_level', () => {
+		const write = busRef(model(), 6)
+		expect(write).toMatchObject({ path: BUS(6), value: { ref: true } })
+		const tree = fixtureState()
+		applyChange(tree, `${MIX}.settings`, { ref_level: -200 })
+		// What a real unit sent back: ref, then the master; ref is reset later without a message
+		applyChange(tree, BUS(6), { ref: true })
+		expect(write.confirmed(new AnubisModel(tree))).toBe(false)
+		applyChange(tree, BUS(6), { master_gain: -200 })
+		expect(write.confirmed(new AnubisModel(tree))).toBe(true)
 		expect(busRef(model(), 4).value).toEqual({ ref: true })
 	})
 })

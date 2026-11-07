@@ -297,16 +297,20 @@ export function busButton(model: AnubisModel, busId: number, button: BusButton, 
 }
 
 /**
- * Put a bus at its reference level, as double-clicking its master fader
- * (or REF in its level menu) does. Always sends `ref: true`, as the web UI does.
+ * Put a bus's master at the reference level (the mixer's `ref_level`), as
+ * double-clicking its master fader (or REF in its level menu) does. Sends
+ * `ref: true` every time, as the web UI does; the Anubis then moves the
+ * master and resets `ref` by itself.
  */
 export function busRef(model: AnubisModel, busId: number): Write {
 	const bus = existingBus(model, busId)
+	const level = model.refLevel
+	if (level === null) throw new WriteRefused("The mixer's reference level isn't in the state")
 	return {
-		description: `${bus.name} to its reference level`,
+		description: `${bus.name} master to the reference level (${formatGain(level)} dB)`,
 		control: `bus ${busId} ref`,
 		path: busPath(busId),
 		value: { ref: true },
-		confirmed: (m) => m.bus(busId)?.ref === true,
+		confirmed: (m) => m.bus(busId)?.masterGain === m.refLevel,
 	}
 }
