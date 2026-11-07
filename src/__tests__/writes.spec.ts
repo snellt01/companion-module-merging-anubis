@@ -7,6 +7,11 @@ import {
 	busRef,
 	isAllowedWrite,
 	levelFromDb,
+	preampGain,
+	preampLowCut,
+	preampMode,
+	preampPad,
+	preampSwitch,
 	stripFader,
 	stripMute,
 	stripPan,
@@ -226,6 +231,78 @@ describe('bus writes', () => {
 	})
 })
 
+describe('preamp writes', () => {
+	const CH = (module: number, channel: number) => `$._modules[?(@.id==${module})][0].custom.ins.channels[${channel}]`
+	const withChannel = (module: number, channel: number, value: Record<string, unknown>) => {
+		const tree = fixtureState()
+		applyChange(tree, CH(module, channel), value as never)
+		return new AnubisModel(tree)
+	}
+
+	it('sets the input type, only to one the preamp has', () => {
+		expect(preampMode(model(), 1000, 1)).toMatchObject({ path: CH(154, 0), value: { inputMode: 1 } })
+		expect(preampMode(model(), 1000, 0)).toBeNull()
+		expect(() => preampMode(model(), 1000, 2)).toThrow('no Instrument input') // Combo: mic and line
+		expect(() => preampMode(model(), 1002, 0)).toThrow('no Mic input') // Jack: line and instrument
+		expect(preampMode(model(), 1002, 1)?.value).toEqual({ inputMode: 1 })
+	})
+
+	it('sets gain for the current input type, rounded to 0.5 dB and kept in range', () => {
+		expect(preampGain(model(), 1000, { to: 57.3 })?.value).toEqual({ micGain: 575 })
+		expect(preampGain(model(), 1000, { to: 57.2 })?.value).toEqual({ micGain: 570 })
+		expect(preampGain(model(), 1000, { to: 80 })?.value).toEqual({ micGain: 660 })
+		expect(preampGain(model(), 1000, { by: -1 })?.value).toEqual({ micGain: 550 })
+		expect(preampGain(model(), 1000, { to: 56 })).toBeNull()
+		expect(preampGain(model(), 1002, { to: 10 })?.value).toEqual({ instrumentGain: 100 })
+		expect(preampGain(model(), 1002, { by: -1 })).toBeNull() // already at the bottom
+		expect(() => preampGain(withChannel(154, 0, {}), 1000, { to: Number.NaN })).toThrow(WriteRefused)
+	})
+
+	it('refuses a control the preamp marks read-only', () => {
+		const tree = fixtureState()
+		applyChange(tree, '$._modules[?(@.id==154)][0].custom.ins.capabilities.channel', { micGain_ro: true })
+		expect(() => preampGain(new AnubisModel(tree), 1000, { to: 10 })).toThrow('no Mic gain')
+	})
+
+	it('switches 48 V only on a preamp that has it, set to Mic', () => {
+		expect(preampSwitch(model(), 1000, 'phantom', 'toggle')).toMatchObject({ path: CH(154, 0), value: { m48V: true } })
+		expect(preampSwitch(model(), 1000, 'phantom', 'off')).toBeNull()
+		expect(() => preampSwitch(model(), 1002, 'phantom', 'on')).toThrow('no 48 V')
+		expect(() => preampSwitch(withChannel(154, 0, { inputMode: 1 }), 1000, 'phantom', 'on')).toThrow("isn't on Mic")
+		expect(preampSwitch(model(), 1002, 'phase', 'on')?.value).toEqual({ phase: true })
+		expect(preampSwitch(model(), 1002, 'cut', 'toggle')?.value).toEqual({ cut: true })
+	})
+
+	it('changes nothing but the lock while locked, and nothing at all while off line', () => {
+		const locked = withChannel(154, 0, { lock: true })
+		expect(() => preampGain(locked, 1000, { to: 10 })).toThrow('locked')
+		expect(() => preampSwitch(locked, 1000, 'phantom', 'on')).toThrow('locked')
+		expect(() => preampPad(locked, 1000, 'pad')).toThrow('locked')
+		expect(preampSwitch(locked, 1000, 'lock', 'toggle')?.value).toEqual({ lock: false })
+		const offline = withChannel(154, 0, { inputMode: null })
+		expect(() => preampSwitch(offline, 1000, 'lock', 'on')).toThrow('off line')
+		expect(() => preampMode(offline, 1000, 0)).toThrow('off line')
+	})
+
+	it('sends pad/lift as two writes, lift then pad, only on Mic', () => {
+		const writes = preampPad(model(), 1000, 'pad')
+		expect(writes?.map((w) => w.value)).toEqual([{ lift: false }, { pad: true }])
+		expect(preampPad(model(), 1000, 'lift')?.map((w) => w.value)).toEqual([{ lift: true }, { pad: false }])
+		expect(preampPad(model(), 1000, 'off')).toBeNull()
+		expect(() => preampPad(model(), 1002, 'pad')).toThrow('no pad and lift')
+		expect(() => preampPad(withChannel(154, 0, { inputMode: 1 }), 1000, 'pad')).toThrow("isn't on Mic")
+	})
+
+	it('turns low cut on with its frequency, and off with one write', () => {
+		expect(preampLowCut(model(), 1000, 'on')?.map((w) => w.value)).toEqual([{ lowCut: true }, { lowCut_freq: 80 }])
+		expect(preampLowCut(withChannel(154, 0, { lowCut_freq: 120 }), 1000, 'on')?.[1].value).toEqual({ lowCut_freq: 80 })
+		expect(preampLowCut(withChannel(154, 0, { lowCut: true }), 1000, 'toggle')?.map((w) => w.value)).toEqual([
+			{ lowCut: false },
+		])
+		expect(preampLowCut(model(), 1000, 'off')).toBeNull()
+	})
+})
+
 describe('isAllowedWrite', () => {
 	it('allows the fixed list only', () => {
 		expect(isAllowedWrite({ path: SEND(1210, 0), value: { mute: true } })).toBe(true)
@@ -256,6 +333,14 @@ describe('isAllowedWrite', () => {
 		expect(isAllowedWrite({ path: BUS, value: { has_solo: false } })).toBe(false)
 		expect(isAllowedWrite({ path: BUS, value: { reset: true } })).toBe(false)
 		expect(isAllowedWrite({ path: BUS, value: { name: 'X' } })).toBe(false)
+		const CH = '$._modules[?(@.id==154)][0].custom.ins.channels[0]'
+		expect(isAllowedWrite({ path: CH, value: { micGain: 575 } })).toBe(true)
+		expect(isAllowedWrite({ path: CH, value: { m48V: true } })).toBe(true)
+		expect(isAllowedWrite({ path: CH, value: { inputMode: 3 } })).toBe(false)
+		expect(isAllowedWrite({ path: CH, value: { micAlignment: 10 } })).toBe(false)
+		expect(isAllowedWrite({ path: CH, value: { z_in: true } })).toBe(false)
+		expect(isAllowedWrite({ path: '$._modules[?(@.id==154)][0].custom.ins', value: { lock: true } })).toBe(false)
+		expect(isAllowedWrite({ path: '$._modules[?(@.id==154)][0]', value: { lock: true } })).toBe(false)
 		expect(isAllowedWrite({ path: `${SEND(1210, 0)}.x`, value: { mute: true } })).toBe(false)
 		expect(isAllowedWrite({ path: '$.identity', value: { identify: true } })).toBe(false)
 		expect(isAllowedWrite({ path: '$.network', value: { mute: true } })).toBe(false)

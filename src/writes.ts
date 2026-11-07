@@ -10,7 +10,10 @@ import {
 	formatGain,
 	GAIN_MAX,
 	GAIN_MIN,
+	INPUT_MODES,
 	MIXER_PATH,
+	MODE_CAPABILITIES,
+	type Preamp,
 	type Send,
 	type Strip,
 } from './model.js'
@@ -34,6 +37,7 @@ export type OnOff = 'toggle' | 'on' | 'off'
 const SEND_PATH =
 	/^\$\._oem_ui_process_engine\.music\.mixer\.strips\[\?\(@\.id==\d+\)\]\[0\]\.sends\[\?\(@\.id==\d+\)\]\[0\]$/
 const BUS_PATH = /^\$\._oem_ui_process_engine\.music\.mixer\.busses\[\?\(@\.id==\d+\)\]\[0\]$/
+const PREAMP_PATH = /^\$\._modules\[\?\(@\.id==\d+\)\]\[0\]\.custom\.ins\.channels\[\d+\]$/
 
 export const PAN_MIN = -100
 export const PAN_MAX = 100
@@ -71,6 +75,24 @@ const ALLOWED: { path: RegExp; fields: Record<string, FieldCheck> }[] = [
 			downmix: isBool,
 			// The web UI only ever sends ref: true
 			ref: isTrue,
+		},
+	},
+	{
+		path: PREAMP_PATH,
+		fields: {
+			inputMode: isIntIn(0, 2),
+			// A sanity bound: the builder keeps to the preamp's own range (0…660 here)
+			micGain: isIntIn(-1000, 1000),
+			lineGain: isIntIn(-1000, 1000),
+			instrumentGain: isIntIn(-1000, 1000),
+			m48V: isBool,
+			pad: isBool,
+			lift: isBool,
+			phase: isBool,
+			cut: isBool,
+			lowCut: isBool,
+			lowCut_freq: isIntIn(1, 20000),
+			lock: isBool,
 		},
 	},
 ]
@@ -313,4 +335,158 @@ export function busRef(model: AnubisModel, busId: number): Write {
 		value: { ref: true },
 		confirmed: (m) => m.bus(busId)?.masterGain === m.refLevel,
 	}
+}
+
+function preampPath(p: Preamp): string {
+	return `$._modules[?(@.id==${p.moduleId})][0].custom.ins.channels[${p.channel}]`
+}
+
+/** The preamp lists the control in its capabilities and doesn't mark it read-only */
+function hasCapability(p: Preamp, capability: string): boolean {
+	return p.capabilities[capability] === true && p.capabilities[`${capability}_ro`] !== true
+}
+
+/**
+ * A preamp the web UI lets you change: it is reporting (not "Off Line")
+ * and, for anything but its lock, isn't locked.
+ */
+function usablePreamp(model: AnubisModel, inputId: number, lockItself = false): Preamp {
+	id(inputId, 'preamp')
+	const p = model.preamp(inputId)
+	if (!p) throw new WriteRefused(`There is no preamp on strip ${inputId}`)
+	if (p.offline) throw new WriteRefused(`${p.name}'s preamp is off line`)
+	if (p.lock && !lockItself) throw new WriteRefused(`${p.name}'s preamp is locked`)
+	return p
+}
+
+function preampWrite(
+	p: Preamp,
+	field: string,
+	value: Json,
+	description: string,
+	confirmed: (p: Preamp) => boolean,
+): Write {
+	return {
+		description: `${p.name} preamp: ${description}`,
+		control: `preamp ${p.inputId} ${field}`,
+		path: preampPath(p),
+		value: { [field]: value },
+		confirmed: (m) => {
+			const now = m.preamp(p.inputId)
+			return now !== undefined && confirmed(now)
+		},
+	}
+}
+
+/** Set a preamp's input type (0 Mic, 1 Line, 2 Instrument), where the preamp has it */
+export function preampMode(model: AnubisModel, inputId: number, mode: number): Write | null {
+	const p = usablePreamp(model, inputId)
+	if (p.capabilities.inputMode_ro === true) throw new WriteRefused(`${p.name}'s input type can't be changed`)
+	const capability = MODE_CAPABILITIES[mode]
+	if (!Number.isInteger(mode) || !capability || p.capabilities[capability] !== true) {
+		throw new WriteRefused(`${p.name}'s preamp has no ${INPUT_MODES[mode] ?? `mode ${mode}`} input`)
+	}
+	if (mode === p.mode) return null
+	return preampWrite(p, 'inputMode', mode, `input ${INPUT_MODES[mode]}`, (now) => now.mode === mode)
+}
+
+/**
+ * Gain in dB for the gain entry: as the web UI's entry rounds it, to the
+ * nearest 0.5 dB, then tenths.
+ */
+function preampGainFromDb(db: number): number {
+	if (!Number.isFinite(db)) throw new WriteRefused(`${String(db)} isn't a gain`)
+	let rounded = db
+	if (db % 0.5 !== 0) {
+		const fraction = db - Math.trunc(db)
+		rounded = Math.trunc(db) + (fraction < 0.25 ? 0 : fraction < 0.75 ? 0.5 : 1)
+	}
+	return Math.round(rounded * 10) || 0
+}
+
+/**
+ * Set or step a preamp's gain for its current input type, within the range
+ * the preamp reports for it (`<mode>Gain_info`). A level is rounded to 0.5
+ * dB as the web UI's gain entry does; a step moves by whole tenths.
+ */
+export function preampGain(model: AnubisModel, inputId: number, change: LevelChange): Write | null {
+	const p = usablePreamp(model, inputId)
+	const field = p.gainField
+	const info = p.capabilities[`${field}_info`]
+	const range = typeof info === 'object' && info !== null && !Array.isArray(info) ? info : {}
+	if (!hasCapability(p, field) || typeof range.min !== 'number' || typeof range.max !== 'number') {
+		throw new WriteRefused(`${p.name}'s preamp has no ${INPUT_MODES[p.mode]} gain to change`)
+	}
+	const wanted = 'to' in change ? preampGainFromDb(change.to) : p.gain + levelStep(change.by)
+	const gain = Math.min(range.max, Math.max(range.min, wanted))
+	if (gain === p.gain) return null
+	return preampWrite(p, field, gain, `${INPUT_MODES[p.mode]} gain ${(gain / 10).toFixed(1)} dB`, (now) => {
+		return now.gainField === field && now.gain === gain
+	})
+}
+
+export type PreampSwitch = 'phantom' | 'phase' | 'cut' | 'lock'
+const SWITCHES: Record<PreampSwitch, { field: string; capability: string; name: string }> = {
+	phantom: { field: 'm48V', capability: '48V', name: '48 V' },
+	phase: { field: 'phase', capability: 'phase', name: 'phase invert' },
+	cut: { field: 'cut', capability: 'cut', name: 'cut' },
+	lock: { field: 'lock', capability: 'lock', name: 'lock' },
+}
+
+/**
+ * A preamp's 48 V, phase, cut or lock button. 48 V only on a preamp that
+ * has it, set to Mic; nothing but the lock while it is locked.
+ */
+export function preampSwitch(model: AnubisModel, inputId: number, which: PreampSwitch, set: OnOff): Write | null {
+	const p = usablePreamp(model, inputId, which === 'lock')
+	const { field, capability, name } = SWITCHES[which]
+	if (!hasCapability(p, capability)) throw new WriteRefused(`${p.name}'s preamp has no ${name}`)
+	if (which === 'phantom' && p.mode !== 0) throw new WriteRefused(`${p.name}'s preamp isn't on Mic, so 48 V is off`)
+	const on = set === 'toggle' ? !p[which] : set === 'on'
+	if (on === p[which]) return null
+	return preampWrite(p, field, on, `${name} ${on ? 'on' : 'off'}`, (now) => now[which] === on)
+}
+
+export type PadMode = 'lift' | 'off' | 'pad'
+
+/**
+ * The preamp's pad/lift selector, sent as the web UI sends it: two writes,
+ * lift then pad. Only on a preamp with both, set to Mic.
+ */
+export function preampPad(model: AnubisModel, inputId: number, mode: PadMode): Write[] | null {
+	const p = usablePreamp(model, inputId)
+	if (!hasCapability(p, 'lift') || !hasCapability(p, 'pad'))
+		throw new WriteRefused(`${p.name}'s preamp has no pad and lift`)
+	if (p.mode !== 0) throw new WriteRefused(`${p.name}'s preamp isn't on Mic, so pad and lift are off`)
+	const lift = mode === 'lift'
+	const pad = mode === 'pad'
+	if (p.lift === lift && p.pad === pad) return null
+	return [
+		preampWrite(p, 'lift', lift, `lift ${lift ? 'on' : 'off'}`, (now) => now.lift === lift),
+		preampWrite(p, 'pad', pad, `pad ${pad ? 'on' : 'off'}`, (now) => now.pad === pad),
+	]
+}
+
+/**
+ * The preamp's low cut. Turning it on sends `lowCut: true`, then the
+ * frequency (the current one if the preamp offers it, else its first), as
+ * the web UI does.
+ */
+export function preampLowCut(model: AnubisModel, inputId: number, set: OnOff): Write[] | null {
+	const p = usablePreamp(model, inputId)
+	if (!hasCapability(p, 'lowCut')) throw new WriteRefused(`${p.name}'s preamp has no low cut`)
+	const on = set === 'toggle' ? !p.lowCut : set === 'on'
+	if (on === p.lowCut) return null
+	const off = preampWrite(p, 'lowCut', false, 'low cut off', (now) => !now.lowCut)
+	if (!on) return [off]
+	const offered = p.capabilities.lowCut_info
+	const freqs = Array.isArray(offered)
+		? offered.filter((f): f is number => Number.isInteger(f) && (f as number) > 0)
+		: []
+	if (freqs.length === 0) throw new WriteRefused(`${p.name}'s preamp offers no low cut frequency`)
+	const freq = freqs.includes(p.lowCutFreq) ? p.lowCutFreq : freqs[0]
+	return [
+		preampWrite(p, 'lowCut', true, 'low cut on', (now) => now.lowCut),
+		preampWrite(p, 'lowCut_freq', freq, `low cut at ${freq} Hz`, (now) => now.lowCutFreq === freq),
+	]
 }

@@ -74,10 +74,12 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 	}
 
 	/**
-	 * Build a write from the current state and send it. Anything refused,
-	 * unacknowledged or not reported back is logged as a warning.
+	 * Build a write (or a short sequence, as the web UI sends for pad/lift
+	 * and low cut) from the current state and send it, in order. Anything
+	 * refused, unacknowledged or not reported back is logged as a warning,
+	 * and stops the rest of a sequence.
 	 */
-	async write(build: (model: AnubisModel) => Write | null): Promise<void> {
+	async write(build: (model: AnubisModel) => Write | Write[] | null): Promise<void> {
 		const model = this.anubis?.model
 		if (!this.anubis || !model) {
 			this.log('warn', 'Not connected to the Anubis; nothing sent')
@@ -85,10 +87,15 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 		}
 		let write: Write | null = null
 		try {
-			write = build(model)
-			if (!write) return // already in that state
-			const confirmed = await this.anubis.write(write)
-			if (confirmed === false) this.log('warn', `${write.description}: the Anubis didn't report the change back`)
+			const built = build(model)
+			if (!built) return // already in that state
+			for (write of Array.isArray(built) ? built : [built]) {
+				const confirmed = await this.anubis.write(write)
+				if (confirmed === false) {
+					this.log('warn', `${write.description}: the Anubis didn't report the change back`)
+					return
+				}
+			}
 		} catch (e) {
 			const what = write ? `${write.description}: ` : ''
 			this.log('warn', `${what}${e instanceof Error ? e.message : String(e)}`)

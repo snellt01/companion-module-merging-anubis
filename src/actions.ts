@@ -1,7 +1,24 @@
 import type { DropdownChoice } from '@companion-module/base'
 import type ModuleInstance from './main.js'
-import { busChoices, stripChoices } from './feedbacks.js'
-import { busButton, busMaster, busRef, type OnOff, stripFader, stripMute, stripPan, stripSolo } from './writes.js'
+import { busChoices, preampChoices, stripChoices } from './feedbacks.js'
+import { INPUT_MODES } from './model.js'
+import {
+	busButton,
+	busMaster,
+	busRef,
+	type OnOff,
+	type PadMode,
+	preampGain,
+	preampLowCut,
+	preampMode,
+	preampPad,
+	type PreampSwitch,
+	preampSwitch,
+	stripFader,
+	stripMute,
+	stripPan,
+	stripSolo,
+} from './writes.js'
 
 type StripButtonOptions = { strip: number; bus: number; set: OnOff }
 type StripLevelOptions = { strip: number; bus: number; db: number }
@@ -23,7 +40,24 @@ export type ActionsSchema = {
 	bus_dim: { options: BusButtonOptions }
 	bus_mono: { options: BusButtonOptions }
 	bus_ref: { options: { bus: number } }
+	preamp_mode: { options: { preamp: number; mode: number } }
+	preamp_gain: { options: { preamp: number; db: number } }
+	preamp_gain_step: { options: { preamp: number; db: number } }
+	preamp_48v: { options: PreampSwitchOptions }
+	preamp_phase: { options: PreampSwitchOptions }
+	preamp_cut: { options: PreampSwitchOptions }
+	preamp_lock: { options: PreampSwitchOptions }
+	preamp_lowcut: { options: PreampSwitchOptions }
+	preamp_pad: { options: { preamp: number; pad: PadMode } }
 }
+
+type PreampSwitchOptions = { preamp: number; set: OnOff }
+
+const PAD_MODES: DropdownChoice<PadMode>[] = [
+	{ id: 'lift', label: 'Lift' },
+	{ id: 'off', label: 'Off' },
+	{ id: 'pad', label: 'Pad' },
+]
 
 const ON_OFF: DropdownChoice<OnOff>[] = [
 	{ id: 'toggle', label: 'Toggle' },
@@ -46,6 +80,18 @@ export function UpdateActions(self: ModuleInstance): void {
 	const busses = busChoices(model)
 	const panBusses = busses.filter((b) => model?.bus(b.id)?.panEditable)
 	const monitorBusses = busses.filter((b) => model?.bus(b.id)?.monitors)
+	const preampsWith = (capability: string) =>
+		preampChoices(model).filter((c) => model?.preamp(c.id)?.capabilities[capability] === true)
+	const preamps = preampChoices(model)
+	const preampOption = (choices: DropdownChoice<number>[]) =>
+		({ type: 'dropdown', id: 'preamp', label: 'Preamp', choices, default: choices[0]?.id ?? 0 }) as const
+	const preampSwitchAction = (which: PreampSwitch, name: string, label: string, choices: DropdownChoice<number>[]) => ({
+		name,
+		options: [preampOption(choices), onOffOption(label)],
+		callback: async ({ options: o }: { options: PreampSwitchOptions }) => {
+			await self.write((m) => preampSwitch(m, Number(o.preamp), which, o.set))
+		},
+	})
 
 	const stripOption = (choices: DropdownChoice<number>[]) =>
 		({ type: 'dropdown', id: 'strip', label: 'Strip', choices, default: choices[0]?.id ?? 0 }) as const
@@ -169,6 +215,76 @@ export function UpdateActions(self: ModuleInstance): void {
 			options: [busOption(busses)],
 			callback: async ({ options: o }) => {
 				await self.write((m) => busRef(m, Number(o.bus)))
+			},
+		},
+		preamp_mode: {
+			name: 'Preamp: input type',
+			description: 'Sets a preamp to mic, line or instrument, where it has that input',
+			options: [
+				preampOption(preamps),
+				{
+					type: 'dropdown',
+					id: 'mode',
+					label: 'Input type',
+					choices: INPUT_MODES.map((label, id) => ({ id, label })),
+					default: 0,
+				},
+			],
+			callback: async ({ options: o }) => {
+				await self.write((m) => preampMode(m, Number(o.preamp), Number(o.mode)))
+			},
+		},
+		preamp_gain: {
+			name: 'Preamp: gain',
+			description:
+				"Sets a preamp's gain for its current input type, in dB, rounded to 0.5 dB like the Anubis's gain entry and kept in the preamp's range",
+			options: [
+				preampOption(preamps),
+				{ type: 'number', id: 'db', label: 'Gain (dB)', default: 0, min: -100, max: 100, step: 0.5 },
+			],
+			callback: async ({ options: o }) => {
+				await self.write((m) => preampGain(m, Number(o.preamp), { to: Number(o.db) }))
+			},
+		},
+		preamp_gain_step: {
+			name: 'Preamp: gain up or down',
+			description: "Moves a preamp's gain by a number of dB (negative for down), within the preamp's range",
+			options: [
+				preampOption(preamps),
+				{ type: 'number', id: 'db', label: 'Step (dB)', default: 1, min: -100, max: 100, step: 0.1 },
+			],
+			callback: async ({ options: o }) => {
+				await self.write((m) => preampGain(m, Number(o.preamp), { by: Number(o.db) }))
+			},
+		},
+		preamp_48v: {
+			...preampSwitchAction('phantom', 'Preamp: 48 V', '48 V', preampsWith('48V')),
+			description: 'Phantom power, on preamps that have it, when set to Mic',
+		},
+		preamp_phase: preampSwitchAction('phase', 'Preamp: phase invert', 'Phase invert', preampsWith('phase')),
+		preamp_cut: preampSwitchAction('cut', 'Preamp: cut', 'Cut', preampsWith('cut')),
+		preamp_lock: {
+			...preampSwitchAction('lock', 'Preamp: lock', 'Lock', preampsWith('lock')),
+			description:
+				"Locks a preamp's settings, as its lock button does; a locked preamp refuses every other preamp action",
+		},
+		preamp_lowcut: {
+			name: 'Preamp: low cut',
+			description: "Turns a preamp's low cut filter on or off, at the frequency the preamp offers",
+			options: [preampOption(preampsWith('lowCut')), onOffOption('Low cut')],
+			callback: async ({ options: o }) => {
+				await self.write((m) => preampLowCut(m, Number(o.preamp), o.set))
+			},
+		},
+		preamp_pad: {
+			name: 'Preamp: pad / lift',
+			description: "Sets a mic preamp's pad/lift selector, on preamps that have it",
+			options: [
+				preampOption(preampsWith('pad')),
+				{ type: 'dropdown', id: 'pad', label: 'Setting', choices: PAD_MODES, default: 'off' },
+			],
+			callback: async ({ options: o }) => {
+				await self.write((m) => preampPad(m, Number(o.preamp), o.pad))
 			},
 		},
 	})

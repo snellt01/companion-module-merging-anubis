@@ -70,7 +70,9 @@ export interface Bus {
 }
 
 export const INPUT_MODES = ['Mic', 'Line', 'Instrument'] as const
-const GAIN_FIELDS = ['micGain', 'lineGain', 'instrumentGain'] as const
+/** Each input mode's gain field, and the capability flag that says the preamp has the mode */
+export const GAIN_FIELDS = ['micGain', 'lineGain', 'instrumentGain'] as const
+export const MODE_CAPABILITIES = ['mic', 'line', 'instrument'] as const
 
 export interface Preamp {
 	/** The input (and strip) this preamp feeds */
@@ -79,6 +81,10 @@ export interface Preamp {
 	moduleId: number
 	channel: number
 	mode: number
+	/** No input mode reported: the web UI shows "Off Line" and disables the preamp */
+	offline: boolean
+	/** The gain field for the current mode (micGain, lineGain or instrumentGain) */
+	gainField: string
 	gain: number
 	phantom: boolean
 	pad: boolean
@@ -86,6 +92,7 @@ export interface Preamp {
 	phase: boolean
 	cut: boolean
 	lowCut: boolean
+	lowCutFreq: number
 	lock: boolean
 	capabilities: JsonObject
 }
@@ -250,20 +257,25 @@ export class AnubisModel {
 			const ins = obj(obj(modules.get(moduleId)?.custom).ins)
 			const ch = obj(arr(ins.channels)[channel])
 			if (Object.keys(ch).length === 0) continue
+			const offline = typeof ch.inputMode !== 'number'
 			const mode = num(ch.inputMode)
+			const gainField = GAIN_FIELDS[mode] ?? 'micGain'
 			result.push({
 				inputId: strip.id,
 				name: strip.name,
 				moduleId,
 				channel,
 				mode,
-				gain: num(ch[GAIN_FIELDS[mode] ?? 'micGain']),
+				offline,
+				gainField,
+				gain: num(ch[gainField]),
 				phantom: bool(ch.m48V),
 				pad: bool(ch.pad),
 				lift: bool(ch.lift),
 				phase: bool(ch.phase),
 				cut: bool(ch.cut),
 				lowCut: bool(ch.lowCut),
+				lowCutFreq: num(ch.lowCut_freq, -1),
 				lock: bool(ch.lock),
 				capabilities: obj(obj(ins.capabilities).channel),
 			})

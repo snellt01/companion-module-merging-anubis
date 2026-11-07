@@ -5,8 +5,8 @@ mixer faders, mutes, solos and pan, bus master, mute, dim and mono, and
 the preamps. Buttons show the Anubis's current state, whether a change
 was made in Companion, on the unit, in its web UI or over OSC.
 
-**This version controls the mixer's strips and buses.** Preamp actions
-come in a later version; their state is already shown.
+Strips, buses and preamps can all be changed from buttons, but only where
+the Anubis's own web UI would let you change them.
 
 ### Configuration
 
@@ -73,6 +73,22 @@ Numbers in the names are the Anubis's own ids (MIC 1 is 1000, MIC 2 is
 - **Bus: reference level**: puts a bus's master at the mixer's reference
   level (set in the Anubis's mixer settings), as double-clicking the master fader on the Anubis
   does.
+- **Preamp: input type**: mic, line or instrument, where the preamp has
+  that input (the combo inputs: mic and line; the jacks: line and
+  instrument).
+- **Preamp: gain** (a level in dB, rounded to 0.5 dB like the Anubis's
+  gain entry) and **Preamp: gain up or down** (by a step): the gain for
+  the preamp's current input type, kept in the range the preamp
+  reports.
+- **Preamp: 48 V**: phantom power on or off, only on preamps that have
+  it and only while set to Mic. Check what's plugged in before using it.
+- **Preamp: pad / lift**: lift, off or pad, on mic preamps that have it,
+  while set to Mic.
+- **Preamp: phase invert**, **Preamp: cut** and **Preamp: low cut**: on,
+  off or toggle. Low cut uses the frequency the preamp offers.
+- **Preamp: lock**: as the preamp's lock button. While a preamp is
+  locked, every other preamp action on it is refused; unlock it first.
+  A preamp the Anubis reports as off line can't be changed at all.
 - **Read the Anubis state again**: reads everything again. Sends nothing
   to the mixer.
 
