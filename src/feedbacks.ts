@@ -57,17 +57,22 @@ export function UpdateFeedbacks(self: ModuleInstance): void {
 	const busses = busChoices(model())
 	const preamps = preampChoices(model())
 
+	// allowCustom: the lists are empty until the Anubis's state has been
+	// read, and Companion checks saved buttons against them at start-up.
 	const stripOptions = [
-		{ type: 'dropdown', id: 'strip', label: 'Strip', choices: strips, default: strips[0]?.id ?? 0 },
-		{ type: 'dropdown', id: 'bus', label: 'Bus', choices: busses, default: 0 },
+		{ type: 'dropdown', id: 'strip', label: 'Strip', choices: strips, default: strips[0]?.id ?? 0, allowCustom: true },
+		{ type: 'dropdown', id: 'bus', label: 'Bus', choices: busses, default: 0, allowCustom: true },
 	] as const
-	const busOption = [{ type: 'dropdown', id: 'bus', label: 'Bus', choices: busses, default: 0 }] as const
+	const busOption = [
+		{ type: 'dropdown', id: 'bus', label: 'Bus', choices: busses, default: 0, allowCustom: true },
+	] as const
 	const preampOption = {
 		type: 'dropdown',
 		id: 'preamp',
 		label: 'Preamp',
 		choices: preamps,
 		default: preamps[0]?.id ?? 0,
+		allowCustom: true,
 	} as const
 
 	const send = (o: StripOptions) => model()?.strip(Number(o.strip))?.sends.get(Number(o.bus))

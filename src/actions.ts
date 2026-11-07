@@ -83,8 +83,18 @@ export function UpdateActions(self: ModuleInstance): void {
 	const preampsWith = (capability: string) =>
 		preampChoices(model).filter((c) => model?.preamp(c.id)?.capabilities[capability] === true)
 	const preamps = preampChoices(model)
+	// allowCustom on the id lists: they are empty until the Anubis's state
+	// has been read, and Companion checks saved buttons against them at
+	// start-up. Every write is checked against the live state anyway.
 	const preampOption = (choices: DropdownChoice<number>[]) =>
-		({ type: 'dropdown', id: 'preamp', label: 'Preamp', choices, default: choices[0]?.id ?? 0 }) as const
+		({
+			type: 'dropdown',
+			id: 'preamp',
+			label: 'Preamp',
+			choices,
+			default: choices[0]?.id ?? 0,
+			allowCustom: true,
+		}) as const
 	const preampSwitchAction = (which: PreampSwitch, name: string, label: string, choices: DropdownChoice<number>[]) => ({
 		name,
 		options: [preampOption(choices), onOffOption(label)],
@@ -94,9 +104,16 @@ export function UpdateActions(self: ModuleInstance): void {
 	})
 
 	const stripOption = (choices: DropdownChoice<number>[]) =>
-		({ type: 'dropdown', id: 'strip', label: 'Strip', choices, default: choices[0]?.id ?? 0 }) as const
+		({
+			type: 'dropdown',
+			id: 'strip',
+			label: 'Strip',
+			choices,
+			default: choices[0]?.id ?? 0,
+			allowCustom: true,
+		}) as const
 	const busOption = (choices: DropdownChoice<number>[]) =>
-		({ type: 'dropdown', id: 'bus', label: 'Bus', choices, default: choices[0]?.id ?? 0 }) as const
+		({ type: 'dropdown', id: 'bus', label: 'Bus', choices, default: choices[0]?.id ?? 0, allowCustom: true }) as const
 	const onOffOption = (label: string) =>
 		({ type: 'dropdown', id: 'set', label, choices: ON_OFF, default: 'toggle' }) as const
 	const dbOption = (db: typeof LEVEL) => ({ type: 'number', id: 'db', step: 0.1, ...db }) as const
