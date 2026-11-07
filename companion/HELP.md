@@ -17,6 +17,9 @@ the Anubis's own web UI would let you change them.
 
 - **Strip: muted / solo**: a strip on a chosen bus. A linked pair shown
   as one strip on the Anubis (e.g. "Stream-L + Stream-R") is one choice.
+- **Strip: fader level**: a strip's fader on a chosen bus is at or
+  above, or below, a level in dB (to a tenth; -144.5 is -inf). A linked
+  pair shown as one strip uses its shared fader.
 - **Bus: muted / dimmed / mono / a strip is soloed**. The MIXER bus mute
   is the main mute in the Anubis's web UI.
 - **Preamp: setting is on**: 48 V, pad, lift, phase invert, low cut, cut

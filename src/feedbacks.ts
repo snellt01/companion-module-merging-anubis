@@ -4,10 +4,13 @@ import { type AnubisModel, INPUT_MODES, type Preamp, stripLabel } from './model.
 
 type StripOptions = { strip: number; bus: number }
 type BusOptions = { bus: number }
+type LevelOptions = StripOptions & { compare: Compare; db: number }
+type Compare = 'atOrAbove' | 'below'
 
 export type FeedbacksSchema = {
 	strip_mute: { type: 'boolean'; options: StripOptions }
 	strip_solo: { type: 'boolean'; options: StripOptions }
+	strip_level: { type: 'boolean'; options: LevelOptions }
 	bus_mute: { type: 'boolean'; options: BusOptions }
 	bus_dim: { type: 'boolean'; options: BusOptions }
 	bus_mono: { type: 'boolean'; options: BusOptions }
@@ -31,6 +34,7 @@ export const RED = 0xcc0000
 export const YELLOW = 0xffcc00
 export const ORANGE = 0xff8000
 export const BLUE = 0x0050c8
+export const GREEN = 0x009900
 export const WHITE = 0xffffff
 export const BLACK = 0x000000
 
@@ -95,6 +99,34 @@ export function UpdateFeedbacks(self: ModuleInstance): void {
 			defaultStyle: { bgcolor: YELLOW, color: BLACK },
 			options: [...stripOptions],
 			callback: (fb) => send(fb.options)?.solo ?? false,
+		},
+		strip_level: {
+			type: 'boolean',
+			name: 'Strip: fader level',
+			description:
+				"A strip's fader on a bus is at or above, or below, a level (a linked pair shown as one strip: its shared fader)",
+			defaultStyle: { bgcolor: GREEN, color: WHITE },
+			options: [
+				...stripOptions,
+				{
+					type: 'dropdown',
+					id: 'compare',
+					label: 'When the fader is',
+					choices: [
+						{ id: 'atOrAbove', label: 'At or above' },
+						{ id: 'below', label: 'Below' },
+					],
+					default: 'atOrAbove',
+				},
+				{ type: 'number', id: 'db', label: 'Level (dB, -144.5 is -inf)', default: 0, min: -144.5, max: 6, step: 0.1 },
+			],
+			callback: (fb) => {
+				const level = send(fb.options)?.faderGain
+				if (level === undefined) return false
+				// Tenths of a dB, as the Anubis keeps them
+				const at = Math.round(Number(fb.options.db) * 10)
+				return fb.options.compare === 'below' ? level < at : level >= at
+			},
 		},
 		bus_mute: {
 			type: 'boolean',
