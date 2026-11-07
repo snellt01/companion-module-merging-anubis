@@ -97,7 +97,6 @@ package versions at least three days old.
       while an input is disconnected).
 - [ ] An identify action.
 - [ ] Strip groups: group fader, mute and solo.
-- [ ] Level meters (`/ravenna/meter`, not subscribed yet).
 - [ ] Decide whether recalling the Anubis's mixer presets
       (`load_from_preset`) belongs in the module: it changes the whole
       mixer at once.

@@ -42,6 +42,8 @@ it isn't designed to. In practice:
 - **No read-only mode on untested firmware**: log a warning instead.
   Tested firmware: `2.0.0-RL-26Q2-20260605.2+9abce1f5`.
 - **Faders go to +6 dB** (60), the Anubis's own maximum.
+- **No level metering**: don't subscribe to `/ravenna/meter` or add
+  meter variables or feedbacks.
 
 ## The Anubis's API
 
