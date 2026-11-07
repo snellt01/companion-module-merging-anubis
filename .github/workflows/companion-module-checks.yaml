@@ -7,11 +7,11 @@ jobs:
   check:
     name: Check module
 
-    if: ${{ !contains(github.repository, 'companion-module-template-') }}
+    # Bitfocus's workflow gives its checkout only packages: read, which can't
+    # clone a private repo; it runs once the repo is public.
+    if: ${{ !contains(github.repository, 'companion-module-template-') && !github.event.repository.private }}
 
     permissions:
-      # contents: read lets the check clone the repo while it is private
-      contents: read
       packages: read
 
     uses: bitfocus/actions/.github/workflows/module-checks.yaml@main
