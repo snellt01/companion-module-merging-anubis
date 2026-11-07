@@ -32,6 +32,9 @@ type Change = { path: string; value: Json }
 
 // Like the web UI: one publish per control every 50 ms, latest value wins.
 const MIN_INTERVAL_MS = 50
+// After a change that adds or leaves out strips, sends or other items kept
+// by id, the whole state is read again this long after the last one.
+const REREAD_DELAY_MS = 1000
 
 function isChange(data: unknown): data is Change {
 	return typeof data === 'object' && data !== null && typeof (data as Change).path === 'string'
@@ -50,6 +53,9 @@ export class AnubisConnection {
 	private lastSent = new Map<string, number>()
 	private queued = new Map<string, Write>()
 	private watchers = new Set<() => void>()
+	private rereadTimer: ReturnType<typeof setTimeout> | null = null
+	// Changes that arrive while the state is read again; applied on top of it.
+	private rereading: Change[] | null = null
 
 	constructor(
 		private readonly options: AnubisOptions,
@@ -68,15 +74,34 @@ export class AnubisConnection {
 
 	async stop(): Promise<void> {
 		this.running = false
+		if (this.rereadTimer) clearTimeout(this.rereadTimer)
+		this.rereadTimer = null
 		this.wake?.()
 		await this.listener?.stop()
 	}
 
 	/** Read the whole state again (a GET; nothing is sent to the mixer). */
 	async refresh(): Promise<void> {
-		if (!this.tree) return
-		this.tree = await this.readState()
-		this.events.loaded(new AnubisModel(this.tree))
+		if (!this.tree || this.rereading) return
+		this.rereading = []
+		try {
+			const tree = await this.readState()
+			for (const change of this.rereading) this.apply(tree, change, false)
+			this.tree = tree
+			this.events.loaded(new AnubisModel(tree))
+			for (const check of [...this.watchers]) check()
+		} finally {
+			this.rereading = null
+		}
+	}
+
+	private scheduleReread(): void {
+		if (!this.running) return
+		if (this.rereadTimer) clearTimeout(this.rereadTimer)
+		this.rereadTimer = setTimeout(() => {
+			this.rereadTimer = null
+			this.refresh().catch((e) => this.events.log('debug', `reading the state again failed: ${String(e)}`))
+		}, REREAD_DELAY_MS)
 	}
 
 	/**
@@ -136,7 +161,7 @@ export class AnubisConnection {
 				const listening = listener.listen()
 				listening.catch(() => undefined) // awaited below
 				const tree = await this.readState()
-				for (const change of this.early) this.apply(tree, change)
+				for (const change of this.early) this.apply(tree, change, false)
 				this.early = null
 				this.tree = tree
 				this.ready = true
@@ -163,13 +188,14 @@ export class AnubisConnection {
 		}
 	}
 
-	private apply(tree: JsonObject, change: Change): void {
+	/** Apply a change; unless replaying, one that adds or leaves out items kept by id has the state read again */
+	private apply(tree: JsonObject, change: Change, watchShape = true): void {
 		if (change.path === '$') {
 			if (typeof change.value === 'object' && change.value !== null && !Array.isArray(change.value)) {
 				for (const key of Object.keys(tree)) delete tree[key]
 				Object.assign(tree, change.value)
 			}
-		} else if (!applyChange(tree, change.path, change.value)) {
+		} else if (!applyChange(tree, change.path, change.value, watchShape ? () => this.scheduleReread() : undefined)) {
 			this.events.log('debug', `ignored change to ${change.path}`)
 		}
 	}
@@ -185,6 +211,7 @@ export class AnubisConnection {
 			return
 		}
 		if (!this.tree) return
+		this.rereading?.push(message.data)
 		this.apply(this.tree, message.data)
 		// One update for each batch the long-poll delivers.
 		if (!this.flushPending) {

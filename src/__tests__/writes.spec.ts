@@ -344,6 +344,21 @@ describe('talkback writes', () => {
 		expect(talkToAll(talking(4), 'on').every((w) => w.value.talking_to_cue === true)).toBe(true)
 	})
 
+	it('follows a cue bus switched from following the mix to its own mix, and back', () => {
+		const tree = fixtureState()
+		applyChange(tree, BUS(2), { cue_mode: 0, pan_linked: true })
+		const own = new AnubisModel(tree)
+		expect(own.bus(2)).toMatchObject({ hasTalk: true, monitors: false, panEditable: false })
+		expect(talkToCue(own, 2, 'on').value).toEqual({ talking_to_cue: true })
+		expect(talkToAll(own, 'on').map((w) => w.path)).toEqual([BUS(2), BUS(3), BUS(4), BUS(5), BUS(6)])
+		expect(() => busButton(own, 2, 'dim', 'on')).toThrow('no dim button')
+		expect(() => stripPan(own, 1210, 2, { to: 0 })).toThrow('linked to the mix')
+		applyChange(tree, BUS(2), { cue_mode: 1, pan_linked: false })
+		const following = new AnubisModel(tree)
+		expect(following.bus(2)).toMatchObject({ hasTalk: false, monitors: true, panEditable: true })
+		expect(() => talkToCue(following, 2, 'on')).toThrow('no TALK button')
+	})
+
 	it('sets the talkback source, as TALK INPUT in a strip menu does', () => {
 		const write = talkInput(model(), 1000)
 		expect(write).toMatchObject({ path: `${MIX}.settings`, value: { talk_input: 1000 }, control: 'talk input' })

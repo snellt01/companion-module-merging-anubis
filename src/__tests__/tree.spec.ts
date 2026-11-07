@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applyChange, getAt, merge, parsePath } from '../tree.js'
+import { applyChange, getAt, type Json, merge, parsePath } from '../tree.js'
 import { fixtureState } from './fake-anubis.js'
 
 const SEND = (strip: number, bus: number) =>
@@ -39,9 +39,83 @@ describe('merge', () => {
 		expect(merge({ a: 1, b: { c: 2, d: 3 } }, { b: { c: 4 } })).toEqual({ a: 1, b: { c: 4, d: 3 } })
 	})
 
-	it('merges arrays item by item and takes the new length', () => {
+	it('merges arrays without ids item by item and takes the new length', () => {
 		expect(merge([{ a: 1 }, { a: 2 }], [{ b: 3 }])).toEqual([{ a: 1, b: 3 }])
 		expect(merge([1], [5, 6])).toEqual([5, 6])
+	})
+
+	it('merges lists kept by id by id, keeping the items not sent', () => {
+		// What a real unit sends when the muted-DAWs view changes: some strips, one send each
+		const strips: Json = [
+			{
+				id: 4,
+				sends: [
+					{ id: 0, visible: true, gain: 0 },
+					{ id: 1, visible: true },
+				],
+			},
+			{ id: 6, sends: [{ id: 0, visible: true }] },
+			{ id: 1000, sends: [{ id: 0, visible: true }] },
+		]
+		let reshaped = 0
+		merge(
+			strips,
+			[
+				{ id: 6, sends: [{ id: 0, visible: false }] },
+				{ id: 4, sends: [{ id: 1, visible: false }] },
+			],
+			() => reshaped++,
+		)
+		expect(strips).toEqual([
+			{
+				id: 4,
+				sends: [
+					{ id: 0, visible: true, gain: 0 },
+					{ id: 1, visible: false },
+				],
+			},
+			{ id: 6, sends: [{ id: 0, visible: false }] },
+			{ id: 1000, sends: [{ id: 0, visible: true }] },
+		])
+		// A partial list may also mean items were removed: the state should be read again
+		expect(reshaped).toBeGreaterThan(0)
+	})
+
+	it('adds new items to a list kept by id, and says so; the same ids in another order are no change', () => {
+		let reshaped = 0
+		const list = [
+			{ id: 1, n: 0 },
+			{ id: 2, n: 1 },
+		]
+		merge(
+			list,
+			[
+				{ id: 2, n: 0 },
+				{ id: 1, n: 1 },
+			],
+			() => reshaped++,
+		)
+		expect(reshaped).toBe(0)
+		expect(list).toEqual([
+			{ id: 1, n: 1 },
+			{ id: 2, n: 0 },
+		])
+		merge(list, [{ id: 1 }, { id: 2 }, { id: 3, n: 2 }], () => reshaped++)
+		expect(list.map((i) => i.id)).toEqual([1, 2, 3])
+		expect(reshaped).toBe(1)
+	})
+})
+
+describe('applyChange to an id the tree does not have', () => {
+	it('is ignored, and says the state should be read again', () => {
+		const tree = { strips: [{ id: 1, name: 'A' }] }
+		let reshaped = 0
+		expect(applyChange(tree, '$.strips[?(@.id==2)][0]', { name: 'B' }, () => reshaped++)).toBe(false)
+		expect(applyChange(tree, '$.strips[?(@.id==2)][0].sends', [], () => reshaped++)).toBe(false)
+		expect(reshaped).toBe(2)
+		// A part of the tree the module never read isn't a reason to read again
+		expect(applyChange(tree, '$.pages[?(@.id==2)][0]', { x: 1 }, () => reshaped++)).toBe(false)
+		expect(reshaped).toBe(2)
 	})
 })
 

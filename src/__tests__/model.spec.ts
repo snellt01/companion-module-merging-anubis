@@ -52,14 +52,19 @@ describe('AnubisModel', () => {
 	})
 
 	it('follows on-screen order when strips move', () => {
+		// The unit sends the whole list, renumbered
 		const tree = fixtureState()
-		applyChange(tree, '$._oem_ui_process_engine.music.mixer', {
-			displayed_strips: [
-				{ id: 1200, display_number: 0 },
-				{ id: 1000, display_number: 1 },
-			],
-		})
-		expect(new AnubisModel(tree).strips().map((s) => s.id)).toEqual([1200, 1000])
+		const before = new AnubisModel(tree).strips().map((s) => s.id)
+		const moved = [before[2], ...before.slice(0, 2), ...before.slice(3)]
+		let reshaped = 0
+		applyChange(
+			tree,
+			'$._oem_ui_process_engine.music.mixer.displayed_strips',
+			moved.map((id, i) => ({ id, display_number: i })),
+			() => reshaped++,
+		)
+		expect(new AnubisModel(tree).strips().map((s) => s.id)).toEqual(moved)
+		expect(reshaped).toBe(0)
 	})
 
 	it('reads the buses', () => {

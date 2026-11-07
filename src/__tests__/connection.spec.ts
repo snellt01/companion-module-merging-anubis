@@ -115,6 +115,48 @@ describe('AnubisConnection against a pretend Anubis', () => {
 		expect(latest?.bus(3)?.talking).toBe(false)
 	})
 
+	it('merges a partial strip list by id, then reads the state again', async () => {
+		const MIX = '$._oem_ui_process_engine.music.mixer'
+		connection = new AnubisConnection({ url, retryMs: 50 }, events)
+		connection.start()
+		await waitFor(() => loads === 1)
+		const strips = latest!.strips().length
+		// What a real unit sends when the muted-DAWs view changes: some strips, one send each
+		fake.push(`${MIX}.strips`, [
+			{ id: 1001, sends: [{ id: 0, visible: false }] },
+			{ id: 1000, sends: [{ id: 1, visible: false }] },
+		])
+		await waitFor(() => latest?.strip(1001)?.sends.get(0)?.visible === false)
+		expect(latest!.strips().length).toBe(strips)
+		expect(latest!.strip(1001)?.sends.get(1)?.visible).toBe(true)
+		expect(latest!.strip(1000)?.sends.get(1)?.visible).toBe(false)
+		expect(latest!.strip(1000)?.name).toBe('MIC 1')
+		// A partial list can't say whether strips were removed: the whole state is read again
+		await waitFor(() => fake.stateReads === 2)
+		await waitFor(() => loads === 2)
+	})
+
+	it('picks up a strip added on the Anubis', async () => {
+		const MIX = '$._oem_ui_process_engine.music.mixer'
+		connection = new AnubisConnection({ url, retryMs: 50 }, events)
+		connection.start()
+		await waitFor(() => loads === 1)
+		// The Anubis adds an input: its state gains the strip, and it pushes the new on-screen list
+		const mixer = (fake.state._oem_ui_process_engine as any).music.mixer
+		const copy = (list: any[], from: number, extra: object) => ({
+			...structuredClone(list.find((x) => x.id === from)),
+			...extra,
+		})
+		mixer.strips.push(copy(mixer.strips, 1210, { id: 1300, name: 'Stream 4', input_id: 1300 }))
+		mixer.inputs.push(copy(mixer.inputs, 1210, { id: 1300 }))
+		mixer.displayed_strips.push({ id: 1300, display_number: mixer.displayed_strips.length })
+		fake.push(`${MIX}.displayed_strips`, mixer.displayed_strips)
+		await waitFor(() => latest?.strip(1300) !== undefined)
+		expect(latest!.strip(1300)?.name).toBe('Stream 4')
+		expect(fake.stateReads).toBe(2)
+		expect(fake.channelsReceived().every((c) => c.startsWith('/meta/'))).toBe(true)
+	})
+
 	it("reports a write that doesn't come back", async () => {
 		fake.expect(SEND(1210, 0), { mute: true })
 		fake.echo = () => []

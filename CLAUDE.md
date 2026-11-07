@@ -53,7 +53,10 @@ MIXER-ALT also changes the other and any cue bus following the mix;
 `link_gain` moves both sides of a pair, keeping their offset; one pan
 change applies to every bus (though stored values can differ per bus);
 a collapsed linked pair is written once to its left strip with
-`link_*`; OSC changes come back with `osc: true`.
+`link_*`; OSC changes come back with `osc: true`. The Anubis sends
+partial lists kept by id (e.g. a few strips, one send each): merge them
+by id, never by position, and read the state again when one adds or
+leaves out items.
 
 ## Code and tests
 

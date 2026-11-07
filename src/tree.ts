@@ -43,12 +43,40 @@ export function getAt(root: Json, path: string): Json | undefined {
 	return node
 }
 
-// Objects merge key by key; arrays merge item by item and take the new
-// length; anything else is replaced.
-export function merge(target: Json, source: Json): Json {
+/** The items' ids, when every item is an object with a numeric id */
+function idsOf(items: Json[]): number[] | null {
+	const ids: number[] = []
+	for (const item of items) {
+		if (!isObject(item) || typeof item.id !== 'number') return null
+		ids.push(item.id)
+	}
+	return ids
+}
+
+/** Called when a change adds or leaves out items of a list kept by id: the state should be read again */
+export type OnReshape = () => void
+
+// Objects merge key by key. Arrays of objects with ids (strips, sends,
+// inputs, buses) merge by id and keep the items not sent: the Anubis sends
+// just the items that changed, e.g. one send of each strip when the
+// muted-DAWs view changes. Other arrays merge item by item and take the new
+// length. Anything else is replaced.
+export function merge(target: Json, source: Json, onReshape?: OnReshape): Json {
 	if (isObject(target) && isObject(source)) {
 		for (const [key, value] of Object.entries(source)) {
-			target[key] = key in target ? merge(target[key], value) : value
+			target[key] = key in target ? merge(target[key], value, onReshape) : value
+		}
+		return target
+	}
+	const targetIds = Array.isArray(target) ? idsOf(target) : null
+	const sourceIds = Array.isArray(source) ? idsOf(source) : null
+	if (Array.isArray(target) && Array.isArray(source) && targetIds && sourceIds) {
+		const known = new Set(targetIds)
+		if (sourceIds.length !== known.size || sourceIds.some((id) => !known.has(id))) onReshape?.()
+		for (const item of source as JsonObject[]) {
+			const existing = target.find((t) => (t as JsonObject).id === item.id)
+			if (existing) merge(existing, item, onReshape)
+			else target.push(item)
 		}
 		return target
 	}
@@ -65,21 +93,30 @@ export function merge(target: Json, source: Json): Json {
 /**
  * Apply one change to the tree. Returns false when the path isn't one we
  * understand or doesn't exist in the tree (the change is then ignored).
+ * `onReshape` is called when the change adds or leaves out items of a list
+ * kept by id, or addresses an id the tree doesn't have.
  */
-export function applyChange(root: JsonObject, path: string, value: Json): boolean {
+export function applyChange(root: JsonObject, path: string, value: Json, onReshape?: OnReshape): boolean {
 	const steps = parsePath(path)
 	if (!steps || steps.length === 0) return false
 	let parent: Json | undefined = root
-	for (const step of steps.slice(0, -1)) parent = child(parent, step)
+	for (const step of steps.slice(0, -1)) {
+		const next = child(parent, step)
+		if (next === undefined && 'id' in step && Array.isArray(parent)) onReshape?.()
+		parent = next
+	}
 	const last = steps[steps.length - 1]
 	if (isObject(parent) && 'key' in last) {
-		parent[last.key] = last.key in parent ? merge(parent[last.key], value) : value
+		parent[last.key] = last.key in parent ? merge(parent[last.key], value, onReshape) : value
 		return true
 	}
 	if (Array.isArray(parent) && !('key' in last)) {
 		const i = 'index' in last ? last.index : parent.findIndex((item) => isObject(item) && item.id === last.id)
-		if (i < 0 || i >= parent.length) return false
-		parent[i] = merge(parent[i], value)
+		if (i < 0 || i >= parent.length) {
+			if ('id' in last) onReshape?.()
+			return false
+		}
+		parent[i] = merge(parent[i], value, onReshape)
 		return true
 	}
 	return false
