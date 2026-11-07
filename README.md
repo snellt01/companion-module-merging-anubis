@@ -88,6 +88,8 @@ package versions at least three days old.
 - [x] Test the talkback actions on a real unit (talk to a cue bus, talk
       to all, source): all worked; several publishes at once made the
       unit close a connection, so publishes now go one at a time.
+- [x] Test the TALK presets from Companion on a real unit: a tap
+      latches, a hold talks only while held.
 - [ ] Check what the unit's own talk button reports.
 - [x] Test SoundID on a real unit (on, switch profile, off): each came
       back, with the EQ count taking and freeing 10.
