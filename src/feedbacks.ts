@@ -23,7 +23,7 @@ type PreampSetting = 'phantom' | 'pad' | 'lift' | 'phase' | 'lowCut' | 'cut' | '
 const PREAMP_SETTINGS: DropdownChoice<PreampSetting>[] = [
 	{ id: 'phantom', label: '48 V' },
 	{ id: 'pad', label: 'Pad' },
-	{ id: 'lift', label: 'Lift' },
+	{ id: 'lift', label: 'Boost' },
 	{ id: 'phase', label: 'Phase invert' },
 	{ id: 'lowCut', label: 'Low cut' },
 	{ id: 'cut', label: 'Cut' },
@@ -159,7 +159,7 @@ export function UpdateFeedbacks(self: ModuleInstance): void {
 		preamp_setting: {
 			type: 'boolean',
 			name: 'Preamp: setting is on',
-			description: '48 V, pad, lift, phase, low cut, cut or lock is on',
+			description: '48 V, pad, boost, phase, low cut, cut or lock is on',
 			defaultStyle: { bgcolor: RED, color: WHITE },
 			options: [
 				preampOption,

@@ -284,12 +284,12 @@ describe('preamp writes', () => {
 		expect(() => preampMode(offline, 1000, 0)).toThrow('off line')
 	})
 
-	it('sends pad/lift as two writes, lift then pad, only on Mic', () => {
+	it('sends pad/boost as two writes, lift then pad, only on Mic', () => {
 		const writes = preampPad(model(), 1000, 'pad')
 		expect(writes?.map((w) => w.value)).toEqual([{ lift: false }, { pad: true }])
 		expect(preampPad(model(), 1000, 'lift')?.map((w) => w.value)).toEqual([{ lift: true }, { pad: false }])
 		expect(preampPad(model(), 1000, 'off')).toBeNull()
-		expect(() => preampPad(model(), 1002, 'pad')).toThrow('no pad and lift')
+		expect(() => preampPad(model(), 1002, 'pad')).toThrow('no pad and boost')
 		expect(() => preampPad(withChannel(154, 0, { inputMode: 1 }), 1000, 'pad')).toThrow("isn't on Mic")
 	})
 

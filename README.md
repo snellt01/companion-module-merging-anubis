@@ -14,7 +14,7 @@ states stay correct.
 **Status:** reads the Anubis and shows its state as variables and button
 feedbacks, controls the mixer's strips (mute, solo, fader, pan), buses
 (master, mute, dim, mono, ref) and preamps (input type, gain, 48 V,
-pad/lift, phase, low cut, cut, lock), and offers presets. Every action
+pad/boost, phase, low cut, cut, lock), and offers presets. Every action
 has been tested on a real Anubis (firmware `2.0.0-RL-26Q2-20260605.2`,
 Music mission), from the module and from Companion buttons. Started from
 Bitfocus's `companion-module-template-ts` (commit `e0d42b7`).

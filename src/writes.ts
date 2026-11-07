@@ -450,19 +450,19 @@ export function preampSwitch(model: AnubisModel, inputId: number, which: PreampS
 export type PadMode = 'lift' | 'off' | 'pad'
 
 /**
- * The preamp's pad/lift selector, sent as the web UI sends it: two writes,
- * lift then pad. Only on a preamp with both, set to Mic.
+ * The preamp's pad/boost selector, sent as the web UI sends it: two writes,
+ * `lift` (shown as Boost) then `pad`. Only on a preamp with both, set to Mic.
  */
 export function preampPad(model: AnubisModel, inputId: number, mode: PadMode): Write[] | null {
 	const p = usablePreamp(model, inputId)
 	if (!hasCapability(p, 'lift') || !hasCapability(p, 'pad'))
-		throw new WriteRefused(`${p.name}'s preamp has no pad and lift`)
-	if (p.mode !== 0) throw new WriteRefused(`${p.name}'s preamp isn't on Mic, so pad and lift are off`)
+		throw new WriteRefused(`${p.name}'s preamp has no pad and boost`)
+	if (p.mode !== 0) throw new WriteRefused(`${p.name}'s preamp isn't on Mic, so pad and boost are off`)
 	const lift = mode === 'lift'
 	const pad = mode === 'pad'
 	if (p.lift === lift && p.pad === pad) return null
 	return [
-		preampWrite(p, 'lift', lift, `lift ${lift ? 'on' : 'off'}`, (now) => now.lift === lift),
+		preampWrite(p, 'lift', lift, `boost ${lift ? 'on' : 'off'}`, (now) => now.lift === lift),
 		preampWrite(p, 'pad', pad, `pad ${pad ? 'on' : 'off'}`, (now) => now.pad === pad),
 	]
 }

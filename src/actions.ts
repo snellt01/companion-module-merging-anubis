@@ -54,7 +54,7 @@ export type ActionsSchema = {
 type PreampSwitchOptions = { preamp: number; set: OnOff }
 
 const PAD_MODES: DropdownChoice<PadMode>[] = [
-	{ id: 'lift', label: 'Lift' },
+	{ id: 'lift', label: 'Boost' },
 	{ id: 'off', label: 'Off' },
 	{ id: 'pad', label: 'Pad' },
 ]
@@ -294,8 +294,8 @@ export function UpdateActions(self: ModuleInstance): void {
 			},
 		},
 		preamp_pad: {
-			name: 'Preamp: pad / lift',
-			description: "Sets a mic preamp's pad/lift selector, on preamps that have it",
+			name: 'Preamp: pad / boost',
+			description: "Sets a mic preamp's pad/boost selector, on preamps that have it",
 			options: [
 				preampOption(preampsWith('pad')),
 				{ type: 'dropdown', id: 'pad', label: 'Setting', choices: PAD_MODES, default: 'off' },

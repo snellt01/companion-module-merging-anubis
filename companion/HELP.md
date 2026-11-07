@@ -22,7 +22,7 @@ the Anubis's own web UI would let you change them.
   pair shown as one strip uses its shared fader.
 - **Bus: muted / dimmed / mono / a strip is soloed**. The MIXER bus mute
   is the main mute in the Anubis's web UI.
-- **Preamp: setting is on**: 48 V, pad, lift, phase invert, low cut, cut
+- **Preamp: setting is on**: 48 V, pad, boost, phase invert, low cut, cut
   or locked.
 - **Preamp: input type**: mic, line or instrument.
 
@@ -40,8 +40,9 @@ Numbers in the names are the Anubis's own ids (MIC 1 is 1000, MIC 2 is
   to the mix, it's the value the web UI shows greyed out. Mute and solo
   on other buses are in the feedbacks.
 - `bus_<id>_name`, `_gain` (master, dB), `_mute`, `_dim`, `_mono`
-- `preamp_<id>_mode`, `_gain` (dB), `_48v`, `_pad`, `_lift` (where the
-  preamp has them), `_phase`, `_lowcut`, `_cut`, `_lock`
+- `preamp_<id>_mode`, `_gain` (dB), `_phase`, `_lowcut`, `_cut`, `_lock`,
+  and where the preamp has them `_48v`, `_pad` and `_lift` (boost, which
+  the Anubis stores as `lift`)
 - `device_name`, `firmware`
 
 ### Actions
@@ -92,7 +93,7 @@ Numbers in the names are the Anubis's own ids (MIC 1 is 1000, MIC 2 is
   reports.
 - **Preamp: 48 V**: phantom power on or off, only on preamps that have
   it and only while set to Mic. Check what's plugged in before using it.
-- **Preamp: pad / lift**: lift, off or pad, on mic preamps that have it,
+- **Preamp: pad / boost**: boost, off or pad, on mic preamps that have it,
   while set to Mic.
 - **Preamp: phase invert**, **Preamp: cut** and **Preamp: low cut**: on,
   off or toggle. Low cut uses the frequency the preamp offers.

@@ -74,7 +74,7 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 	}
 
 	/**
-	 * Build a write (or a short sequence, as the web UI sends for pad/lift
+	 * Build a write (or a short sequence, as the web UI sends for pad/boost
 	 * and low cut) from the current state and send it, in order. Anything
 	 * refused, unacknowledged or not reported back is logged as a warning,
 	 * and stops the rest of a sequence.

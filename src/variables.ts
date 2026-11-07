@@ -49,7 +49,7 @@ export function variableDefinitions(model: AnubisModel | null): CompanionVariabl
 		defs[`preamp_${p.inputId}_gain`] = { name: `${p.name} preamp: gain (dB)` }
 		if (caps['48V'] === true) defs[`preamp_${p.inputId}_48v`] = { name: `${p.name} preamp: 48 V` }
 		if (caps.pad === true) defs[`preamp_${p.inputId}_pad`] = { name: `${p.name} preamp: pad` }
-		if (caps.lift === true) defs[`preamp_${p.inputId}_lift`] = { name: `${p.name} preamp: lift` }
+		if (caps.lift === true) defs[`preamp_${p.inputId}_lift`] = { name: `${p.name} preamp: boost` }
 		defs[`preamp_${p.inputId}_phase`] = { name: `${p.name} preamp: phase invert` }
 		defs[`preamp_${p.inputId}_lowcut`] = { name: `${p.name} preamp: low cut` }
 		defs[`preamp_${p.inputId}_cut`] = { name: `${p.name} preamp: cut` }
