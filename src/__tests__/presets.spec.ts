@@ -59,6 +59,11 @@ describe('presets', () => {
 			down: [{ actionId: 'talk_cue_button', options: { bus: 3, event: 'press' } }],
 			up: [{ actionId: 'talk_cue_button', options: { bus: 3, event: 'release' } }],
 		})
+		expect(ids).toEqual(expect.arrayContaining(['bus_soundid_0_757008898', 'bus_soundid_6_220994182']))
+		expect(ids.filter((id) => id.startsWith('bus_soundid_'))).toHaveLength(14) // 7 buses, 2 profiles
+		expect(captured.presets.bus_soundid_1_757008898.steps[0].down).toEqual([
+			{ actionId: 'bus_soundid', options: { bus: 1, profile: 757008898, set: 'toggle' } },
+		])
 		expect(captured.presets.strip_mute_1200.style.text).toBe('Stream-L + Stream-R\nMUTE')
 		expect(captured.presets.strip_fader_up_1000.style.text).toContain('$(anubis:strip_1000_gain)')
 		// Every preset is in a section, once

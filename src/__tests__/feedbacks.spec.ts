@@ -74,3 +74,28 @@ describe('talkback feedbacks and variables', () => {
 		expect(variableValues(new AnubisModel(tree))).toMatchObject({ talk_input: 'MIC 1', bus_3_talk: true })
 	})
 })
+
+describe('SoundID feedback and variables', () => {
+	const HEADPHONES = 757008898 // on MIXER-ALT and CUE1 in the fixture
+	const SPEAKERS = 220994182
+
+	it('shows SoundID on a bus, with any profile or one', () => {
+		const soundId = feedbacks().bus_soundid
+		expect(soundId.callback({ options: { bus: 1, profile: -2 } })).toBe(true)
+		expect(soundId.callback({ options: { bus: 1, profile: HEADPHONES } })).toBe(true)
+		expect(soundId.callback({ options: { bus: 1, profile: SPEAKERS } })).toBe(false)
+		expect(soundId.callback({ options: { bus: 0, profile: -2 } })).toBe(false)
+		expect(soundId.options[0].choices.map((c: { id: number }) => c.id)).toEqual([0, 1, 2, 3, 4, 5, 6])
+	})
+
+	it('has the profile and its target mode on each monitor and cue bus', () => {
+		const values = variableValues(new AnubisModel(fixtureState()))
+		expect(values).toMatchObject({
+			bus_0_soundid: '',
+			bus_0_soundid_target: '',
+			bus_1_soundid: 'Headphones',
+			bus_1_soundid_target: 'Flat',
+		})
+		expect(values).not.toHaveProperty('bus_7_soundid') // an effect bus
+	})
+})

@@ -77,6 +77,18 @@ export interface Bus {
 	talking: boolean
 	/** The web UI gives this bus a TALK button: a cue bus with its own mix (cue mode 0) */
 	hasTalk: boolean
+	/** The SoundID Reference profile in use (`soundid_profile`), -1 for none */
+	soundId: number
+	/** The web UI offers SoundID on this bus: a monitor or cue bus, not on the Neumann edition */
+	hasSoundId: boolean
+}
+
+/** A SoundID Reference profile loaded on the Anubis */
+export interface SoundIdProfile {
+	id: number
+	name: string
+	/** 'Flat', 'Custom', 'TranslationCheck' or '' */
+	targetMode: string
 }
 
 export const INPUT_MODES = ['Mic', 'Line', 'Instrument'] as const
@@ -235,7 +247,23 @@ export class AnubisModel {
 		return typeof input === 'number' ? input : null
 	}
 
+	/** The SoundID Reference profiles loaded on the Anubis; null when the state has no list */
+	get soundIdProfiles(): SoundIdProfile[] | null {
+		const profiles = obj(obj(this.tree._oem_ui_process_engine).room_correction).profiles
+		if (!Array.isArray(profiles)) return null
+		return profiles.map(obj).map((p) => ({ id: num(p.id, -1), name: str(p.name), targetMode: str(p.target_mode) }))
+	}
+
+	/** EQs the mixer's DSP has left (SoundID needs 10 on a bus that has none); null when not reported */
+	get freeEqs(): number | null {
+		const dsp = obj(this.mixer.dsp_ressources)
+		return typeof dsp.max_eqs === 'number' && typeof dsp.allocated_eqs === 'number'
+			? dsp.max_eqs - dsp.allocated_eqs
+			: null
+	}
+
 	busses(): Bus[] {
+		const neumann = bool(obj(this.mixer.settings).neumann_edition)
 		return arr(this.mixer.busses)
 			.map(obj)
 			.filter((b) => b.enabled !== false)
@@ -257,6 +285,8 @@ export class AnubisModel {
 					cueMode,
 					talking: bool(b.talking_to_cue),
 					hasTalk: cueMode === 0,
+					soundId: num(b.soundid_profile, -1),
+					hasSoundId: (type === 1 || type === 2) && !neumann,
 				}
 			})
 	}

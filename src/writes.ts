@@ -77,6 +77,8 @@ const ALLOWED: { path: RegExp; fields: Record<string, FieldCheck> }[] = [
 			// The web UI only ever sends ref: true
 			ref: isTrue,
 			talking_to_cue: isBool,
+			// A profile's id from room_correction.profiles, or -1 for none
+			soundid_profile: isIntIn(-1, 0xffffffff),
 		},
 	},
 	{
@@ -341,6 +343,44 @@ export function busRef(model: AnubisModel, busId: number): Write {
 		path: busPath(busId),
 		value: { ref: true },
 		confirmed: (m) => m.bus(busId)?.masterGain === m.refLevel,
+	}
+}
+
+/** EQs a bus's SoundID takes from the mixer's DSP */
+export const SOUNDID_EQS = 10
+
+/**
+ * A bus's SoundID Reference profile, as SOUNDID REFERENCE in a monitor or
+ * cue bus's menu sets it: on with a profile, off (none), or toggle (off if
+ * the bus already uses that profile, as choosing it again in the list
+ * does). Turning SoundID on where it's off needs 10 free EQs, as the web
+ * UI checks. Returns null when the bus is already in that state.
+ */
+export function busSoundId(model: AnubisModel, busId: number, profileId: number, set: OnOff): Write | null {
+	const bus = existingBus(model, busId)
+	if (!bus.hasSoundId) throw new WriteRefused(`${bus.name} has no SoundID (only monitor and cue buses)`)
+	const profiles = model.soundIdProfiles
+	if (!profiles || profiles.length === 0) throw new WriteRefused('There are no SoundID profiles on the Anubis')
+	const profile = profiles.find((p) => p.id === profileId)
+	if (set !== 'off' && !profile) throw new WriteRefused(`There is no SoundID profile ${profileId} on the Anubis`)
+	const target = set === 'off' || (set === 'toggle' && bus.soundId === profileId) ? -1 : profileId
+	if (target === bus.soundId) return null
+	if (bus.soundId === -1) {
+		const free = model.freeEqs
+		if (free === null) throw new WriteRefused("The mixer's EQ resources aren't in the state")
+		if (free < SOUNDID_EQS) {
+			const short = SOUNDID_EQS - free
+			throw new WriteRefused(
+				`Not enough EQ resources for SoundID on ${bus.name}: turn off ${short} strip EQs or ${Math.round(short / 2)} bus EQs`,
+			)
+		}
+	}
+	return {
+		description: target === -1 ? `SoundID off on ${bus.name}` : `SoundID on ${bus.name}: ${profile?.name ?? profileId}`,
+		control: `bus ${busId} soundid`,
+		path: busPath(busId),
+		value: { soundid_profile: target },
+		confirmed: (m) => m.bus(busId)?.soundId === target,
 	}
 }
 

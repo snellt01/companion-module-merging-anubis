@@ -5,7 +5,7 @@
 
 import type { CompanionPresetDefinitions, CompanionPresetSection } from '@companion-module/base'
 import type { CompanionButtonStyleProps } from '@companion-module/base'
-import { BLACK, BLUE, busChoices, ORANGE, RED, stripChoices, WHITE, YELLOW } from './feedbacks.js'
+import { BLACK, BLUE, busChoices, GREEN, ORANGE, RED, stripChoices, WHITE, YELLOW } from './feedbacks.js'
 import type ModuleInstance from './main.js'
 import type { ModuleSchema } from './main.js'
 import { DEFAULT_HOLD_MS } from './talkback.js'
@@ -180,6 +180,26 @@ export function UpdatePresets(self: ModuleInstance): void {
 		talk.push(`talk_input_${id}`)
 	}
 	sections.push({ id: 'talkback', name: 'Talkback', definitions: talk })
+
+	// SoundID: each profile on each monitor and cue bus, toggled
+	const soundId: string[] = []
+	for (const b of model.busses()) {
+		if (!b.hasSoundId) continue
+		for (const p of model.soundIdProfiles ?? []) {
+			const key = `bus_soundid_${b.id}_${p.id}`
+			presets[key] = {
+				type: 'simple',
+				name: `${b.name}: SoundID ${p.name}`,
+				style: style(`${b.name}\nSOUNDID\n${p.name}`),
+				steps: [{ down: [{ actionId: 'bus_soundid', options: { bus: b.id, profile: p.id, set: 'toggle' } }], up: [] }],
+				feedbacks: [
+					{ feedbackId: 'bus_soundid', options: { bus: b.id, profile: p.id }, style: { bgcolor: GREEN, color: WHITE } },
+				],
+			}
+			soundId.push(key)
+		}
+	}
+	if (soundId.length > 0) sections.push({ id: 'soundid', name: 'SoundID', definitions: soundId })
 
 	self.setPresetDefinitions(sections, presets)
 }

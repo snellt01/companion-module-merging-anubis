@@ -2,7 +2,8 @@
 
 Controls a Merging Anubis in the **Music mission** through its web API:
 mixer faders, mutes, solos and pan, bus master, mute, dim and mono,
-talkback, and the preamps. Buttons show the Anubis's current state, whether a change
+SoundID Reference on the monitor and cue buses, talkback, and the
+preamps. Buttons show the Anubis's current state, whether a change
 was made in Companion, on the unit, in its web UI or over OSC.
 
 Strips, buses and preamps can all be changed from buttons, but only where
@@ -22,6 +23,8 @@ the Anubis's own web UI would let you change them.
   pair shown as one strip uses its shared fader.
 - **Bus: muted / dimmed / mono / a strip is soloed**. The MIXER bus mute
   is the main mute in the Anubis's web UI.
+- **Bus: SoundID**: SoundID Reference is on for a monitor or cue bus,
+  with any profile or a chosen one.
 - **Preamp: setting is on**: 48 V, pad, boost, phase invert, low cut, cut
   or locked.
 - **Preamp: input type**: mic, line or instrument.
@@ -41,8 +44,10 @@ Numbers in the names are the Anubis's own ids (MIC 1 is 1000, MIC 2 is
   Pan can differ from bus to bus; on buses where the Anubis links pan
   to the mix, it's the value the web UI shows greyed out. Mute and solo
   on other buses are in the feedbacks.
-- `bus_<id>_name`, `_gain` (master, dB), `_mute`, `_dim`, `_mono`, and
-  `_talk` on cue buses with a TALK button
+- `bus_<id>_name`, `_gain` (master, dB), `_mute`, `_dim`, `_mono`,
+  `_talk` on cue buses with a TALK button, and on monitor and cue buses
+  `_soundid` (the SoundID profile's name, empty when off) and
+  `_soundid_target` (its target mode: Flat, Custom or TranslationCheck)
 - `talk_input` (the talkback source's strip name) and `talk_input_id`
   (its ID; 998 is the built-in talk mic)
 - `preamp_<id>_mode`, `_gain` (dB), `_phase`, `_lowcut`, `_cut`, `_lock`,
@@ -110,6 +115,13 @@ Numbers in the names are the Anubis's own ids (MIC 1 is 1000, MIC 2 is
   following the mix). For a button that talks while held, use On when
   pressed and Off when released, as the presets do; On and Off are
   always sent, so a quick tap can't leave talkback on.
+- **Bus: SoundID**: SoundID Reference on a monitor or cue bus, as
+  SOUNDID REFERENCE in the bus's menu: on with a chosen profile, off, or
+  toggle (off when the bus already uses that profile, otherwise on with
+  it). The profiles are the ones loaded on the Anubis (upload them in
+  its web UI). SoundID takes 10 of the mixer's EQs: turning it on where
+  it's off is refused when fewer are free, as on the Anubis. Not on the
+  Neumann edition.
 - **Talkback: TALK key for a cue bus (tap or hold)** and **Talkback:
   TALK ALL key (tap or hold)**: put one on the key's press with Key set to
   Pressed and one on its release with Key set to Released, as the presets
@@ -136,6 +148,8 @@ strips, buses and preamps:
   cue bus following the mix.
 - **Preamps**: 48 V, phase, low cut, cut and lock (where the preamp has
   them) and gain up / down 1 dB showing the gain.
+- **SoundID**: each profile on each monitor and cue bus, as a toggle
+  lit while the bus uses that profile.
 - **Talkback**: TALK for each cue bus with a TALK button and TALK ALL
   (tap to latch, hold to talk while held); and a source button for each
   strip that can be the talkback's input.

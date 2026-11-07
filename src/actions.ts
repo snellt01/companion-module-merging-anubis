@@ -1,11 +1,12 @@
 import type { DropdownChoice } from '@companion-module/base'
 import type ModuleInstance from './main.js'
-import { busChoices, preampChoices, stripChoices } from './feedbacks.js'
+import { busChoices, preampChoices, soundIdChoices, stripChoices } from './feedbacks.js'
 import { INPUT_MODES } from './model.js'
 import {
 	busButton,
 	busMaster,
 	busRef,
+	busSoundId,
 	type OnOff,
 	type PadMode,
 	preampGain,
@@ -44,6 +45,7 @@ export type ActionsSchema = {
 	bus_dim: { options: BusButtonOptions }
 	bus_mono: { options: BusButtonOptions }
 	bus_ref: { options: { bus: number } }
+	bus_soundid: { options: { bus: number; profile: number; set: OnOff } }
 	preamp_mode: { options: { preamp: number; mode: number } }
 	preamp_gain: { options: { preamp: number; db: number } }
 	preamp_gain_step: { options: { preamp: number; db: number } }
@@ -109,6 +111,8 @@ export function UpdateActions(self: ModuleInstance): void {
 	const panBusses = busses.filter((b) => model?.bus(b.id)?.panEditable)
 	const monitorBusses = busses.filter((b) => model?.bus(b.id)?.monitors)
 	const talkBusses = busses.filter((b) => model?.bus(b.id)?.hasTalk)
+	const soundIdBusses = busses.filter((b) => model?.bus(b.id)?.hasSoundId)
+	const profiles = soundIdChoices(model)
 	// Music input and talk mic strips shown on MIXER or MIXER-ALT
 	const talkStrips = stripsWhere((id) => {
 		const strip = model?.strip(id)
@@ -354,6 +358,26 @@ export function UpdateActions(self: ModuleInstance): void {
 			options: [onOffOption('Talk')],
 			callback: async ({ options: o }) => {
 				await self.write((m) => talkToAll(m, o.set), { together: true })
+			},
+		},
+		bus_soundid: {
+			name: 'Bus: SoundID',
+			description:
+				'SoundID Reference on a monitor or cue bus, as SOUNDID REFERENCE in its menu: on with a profile, off, or toggle (off if the bus already uses that profile). Turning it on needs 10 free EQs on the mixer',
+			options: [
+				busOption(soundIdBusses),
+				{
+					type: 'dropdown',
+					id: 'profile',
+					label: 'Profile',
+					choices: profiles,
+					default: profiles[0]?.id ?? 0,
+					allowCustom: true,
+				},
+				onOffOption('SoundID'),
+			],
+			callback: async ({ options: o }) => {
+				await self.write((m) => busSoundId(m, Number(o.bus), Number(o.profile), o.set))
 			},
 		},
 		talk_cue_button: {

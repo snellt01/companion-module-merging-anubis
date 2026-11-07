@@ -3,7 +3,14 @@ import { GetConfigFields, type ModuleConfig } from './config.js'
 import { UpdateVariableDefinitions, variableValues, type VariablesSchema } from './variables.js'
 import { UpgradeScripts } from './upgrades.js'
 import { UpdateActions, type ActionsSchema } from './actions.js'
-import { busChoices, preampChoices, stripChoices, UpdateFeedbacks, type FeedbacksSchema } from './feedbacks.js'
+import {
+	busChoices,
+	preampChoices,
+	soundIdChoices,
+	stripChoices,
+	UpdateFeedbacks,
+	type FeedbacksSchema,
+} from './feedbacks.js'
 import { UpdatePresets } from './presets.js'
 import { AnubisConnection } from './anubis.js'
 import { TalkButtons } from './talkback.js'
@@ -166,7 +173,8 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 				// The buses it's shown on (its per-bus variables)
 				[...s.sends.values()].filter((send) => send.visible).map((send) => send.bus),
 			]),
-			model.busses().map((b) => [b.id, b.monitors, b.panEditable, b.hasTalk]),
+			model.busses().map((b) => [b.id, b.monitors, b.panEditable, b.hasTalk, b.hasSoundId]),
+			soundIdChoices(model),
 		])
 		if (key !== this.definitionsKey) {
 			this.definitionsKey = key

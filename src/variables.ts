@@ -43,6 +43,10 @@ export function variableDefinitions(model: AnubisModel | null): CompanionVariabl
 		defs[`bus_${b.id}_dim`] = { name: `${b.name}: dimmed` }
 		defs[`bus_${b.id}_mono`] = { name: `${b.name}: mono` }
 		if (b.hasTalk) defs[`bus_${b.id}_talk`] = { name: `${b.name}: talkback on` }
+		if (b.hasSoundId) {
+			defs[`bus_${b.id}_soundid`] = { name: `${b.name}: SoundID profile (empty when off)` }
+			defs[`bus_${b.id}_soundid_target`] = { name: `${b.name}: SoundID target mode` }
+		}
 	}
 	defs.talk_input = { name: 'Talkback source (strip name)' }
 	defs.talk_input_id = { name: 'Talkback source (strip id; 998 is the built-in talk mic)' }
@@ -85,6 +89,11 @@ export function variableValues(model: AnubisModel): CompanionVariableValues {
 		values[`bus_${b.id}_dim`] = b.dim
 		values[`bus_${b.id}_mono`] = b.mono
 		if (b.hasTalk) values[`bus_${b.id}_talk`] = b.talking
+		if (b.hasSoundId) {
+			const profile = model.soundIdProfiles?.find((p) => p.id === b.soundId)
+			values[`bus_${b.id}_soundid`] = b.soundId === -1 ? '' : (profile?.name ?? String(b.soundId))
+			values[`bus_${b.id}_soundid_target`] = profile?.targetMode ?? ''
+		}
 	}
 	const talk = model.talkInput
 	values.talk_input = talk === null ? '' : (model.strip(talk)?.name ?? String(talk))

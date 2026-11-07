@@ -2022,8 +2022,31 @@
 					"mix_alt_crossover": false,
 					"mix_alt_crossover_freq": 80,
 					"mix_alt_trim": 0
+				},
+				"dsp_ressources": {
+					"max_eqs": 56,
+					"allocated_eqs": 24,
+					"max_dynamics": 64,
+					"allocated_dynamics": 9,
+					"max_post_fx_mastergain": 5,
+					"allocated_post_fx_mastergain": 0,
+					"available_deessers": 27
 				}
 			}
+		},
+		"room_correction": {
+			"profiles": [
+				{
+					"id": 757008898,
+					"name": "Headphones",
+					"target_mode": "Flat"
+				},
+				{
+					"id": 220994182,
+					"name": "Speakers",
+					"target_mode": "Custom"
+				}
+			]
 		}
 	}
 }

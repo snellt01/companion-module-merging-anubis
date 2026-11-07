@@ -5,6 +5,7 @@ import {
 	busButton,
 	busMaster,
 	busRef,
+	busSoundId,
 	isAllowedWrite,
 	levelFromDb,
 	preampGain,
@@ -382,6 +383,56 @@ describe('talkback writes', () => {
 	})
 })
 
+describe('busSoundId', () => {
+	const BUS = (id: number) => `${MIX}.busses[?(@.id==${id})][0]`
+	const HEADPHONES = 757008898 // on MIXER-ALT and CUE1 in the fixture
+	const SPEAKERS = 220994182
+	const changed = (...changes: [string, Record<string, unknown>][]) => {
+		const tree = fixtureState()
+		for (const [path, value] of changes) applyChange(tree, path, value as never)
+		return new AnubisModel(tree)
+	}
+
+	it('turns SoundID on with a profile, as the bus menu does', () => {
+		const write = busSoundId(model(), 0, SPEAKERS, 'on')
+		expect(write).toMatchObject({ path: BUS(0), value: { soundid_profile: SPEAKERS }, control: 'bus 0 soundid' })
+		expect(write?.description).toBe('SoundID on MIXER: Speakers')
+		expect(write?.confirmed(changed([BUS(0), { soundid_profile: SPEAKERS }]))).toBe(true)
+	})
+
+	it('toggles off when the bus already uses that profile, and switches from another', () => {
+		expect(busSoundId(model(), 1, HEADPHONES, 'toggle')?.value).toEqual({ soundid_profile: -1 })
+		expect(busSoundId(model(), 1, SPEAKERS, 'toggle')?.value).toEqual({ soundid_profile: SPEAKERS })
+		expect(busSoundId(model(), 0, HEADPHONES, 'toggle')?.value).toEqual({ soundid_profile: HEADPHONES })
+		expect(busSoundId(model(), 2, 0, 'off')?.description).toBe('SoundID off on CUE1')
+	})
+
+	it('does nothing when the bus is already in that state', () => {
+		expect(busSoundId(model(), 0, SPEAKERS, 'off')).toBeNull()
+		expect(busSoundId(model(), 1, HEADPHONES, 'on')).toBeNull()
+	})
+
+	it('is only on monitor and cue buses, with a profile the Anubis has', () => {
+		expect(() => busSoundId(model(), 7, SPEAKERS, 'on')).toThrow('REVERB has no SoundID')
+		expect(() => busSoundId(model(), 0, 12345, 'on')).toThrow('no SoundID profile 12345')
+		const tree = fixtureState()
+		;(tree._oem_ui_process_engine as Record<string, unknown>).room_correction = { profiles: [] }
+		expect(() => busSoundId(new AnubisModel(tree), 0, SPEAKERS, 'on')).toThrow('no SoundID profiles')
+		const neumann = changed([`${MIX}.settings`, { neumann_edition: true }])
+		expect(() => busSoundId(neumann, 0, SPEAKERS, 'on')).toThrow(WriteRefused)
+	})
+
+	it('needs 10 free EQs to turn SoundID on, as the web UI checks', () => {
+		const busy = changed([`${MIX}.dsp_ressources`, { allocated_eqs: 50 }])
+		expect(() => busSoundId(busy, 0, SPEAKERS, 'on')).toThrow(
+			'Not enough EQ resources for SoundID on MIXER: turn off 4 strip EQs or 2 bus EQs',
+		)
+		// Switching profile or turning it off takes no more
+		expect(busSoundId(busy, 1, SPEAKERS, 'on')?.value).toEqual({ soundid_profile: SPEAKERS })
+		expect(busSoundId(busy, 1, 0, 'off')?.value).toEqual({ soundid_profile: -1 })
+	})
+})
+
 describe('isAllowedWrite', () => {
 	it('allows the fixed list only', () => {
 		expect(isAllowedWrite({ path: SEND(1210, 0), value: { mute: true } })).toBe(true)
@@ -407,6 +458,10 @@ describe('isAllowedWrite', () => {
 		expect(isAllowedWrite({ path: BUS, value: { downmix: true } })).toBe(true)
 		expect(isAllowedWrite({ path: BUS, value: { ref: true } })).toBe(true)
 		expect(isAllowedWrite({ path: BUS, value: { ref: false } })).toBe(false)
+		expect(isAllowedWrite({ path: BUS, value: { soundid_profile: -1 } })).toBe(true)
+		expect(isAllowedWrite({ path: BUS, value: { soundid_profile: 757008898 } })).toBe(true)
+		expect(isAllowedWrite({ path: BUS, value: { soundid_profile: -2 } })).toBe(false)
+		expect(isAllowedWrite({ path: BUS, value: { soundid_profile: 1.5 } })).toBe(false)
 		expect(isAllowedWrite({ path: BUS, value: { gain: 0 } })).toBe(false)
 		expect(isAllowedWrite({ path: BUS, value: { pan_linked: false } })).toBe(false)
 		expect(isAllowedWrite({ path: BUS, value: { has_solo: false } })).toBe(false)

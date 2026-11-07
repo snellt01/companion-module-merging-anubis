@@ -20,6 +20,7 @@ export type FeedbacksSchema = {
 	talk_cue: { type: 'boolean'; options: BusOptions }
 	talk_any: { type: 'boolean'; options: Record<string, never> }
 	talk_input: { type: 'boolean'; options: { strip: number } }
+	bus_soundid: { type: 'boolean'; options: { bus: number; profile: number } }
 }
 
 type PreampSetting = 'phantom' | 'pad' | 'lift' | 'phase' | 'lowCut' | 'cut' | 'lock'
@@ -54,6 +55,13 @@ export function busChoices(model: AnubisModel | null): DropdownChoice<number>[] 
 	return model ? model.busses().map((b) => ({ id: b.id, label: b.name })) : []
 }
 
+/** For feedbacks: SoundID on with any profile */
+export const ANY_PROFILE = -2
+
+export function soundIdChoices(model: AnubisModel | null): DropdownChoice<number>[] {
+	return (model?.soundIdProfiles ?? []).map((p) => ({ id: p.id, label: p.name }))
+}
+
 export function preampChoices(model: AnubisModel | null): DropdownChoice<number>[] {
 	return model ? model.preamps().map((p) => ({ id: p.inputId, label: p.name })) : []
 }
@@ -63,6 +71,8 @@ export function UpdateFeedbacks(self: ModuleInstance): void {
 	const strips = stripChoices(model())
 	const busses = busChoices(model())
 	const preamps = preampChoices(model())
+	const soundIdBusses = busses.filter((b) => model()?.bus(b.id)?.hasSoundId)
+	const profiles = soundIdChoices(model())
 
 	// allowCustom: the lists are empty until the Anubis's state has been
 	// read, and Companion checks saved buttons against them at start-up.
@@ -220,6 +230,28 @@ export function UpdateFeedbacks(self: ModuleInstance): void {
 				},
 			],
 			callback: (fb) => model()?.talkInput === Number(fb.options.strip),
+		},
+		bus_soundid: {
+			type: 'boolean',
+			name: 'Bus: SoundID',
+			description: 'SoundID Reference is on for a monitor or cue bus, with any profile or one',
+			defaultStyle: { bgcolor: GREEN, color: WHITE },
+			options: [
+				{ ...busOption[0], choices: soundIdBusses },
+				{
+					type: 'dropdown',
+					id: 'profile',
+					label: 'Profile',
+					choices: [{ id: ANY_PROFILE, label: 'Any profile' }, ...profiles],
+					default: ANY_PROFILE,
+					allowCustom: true,
+				},
+			],
+			callback: (fb) => {
+				const used = bus(fb.options)?.soundId ?? -1
+				const profile = Number(fb.options.profile)
+				return used !== -1 && (profile === ANY_PROFILE || used === profile)
+			},
 		},
 	}
 	self.setFeedbackDefinitions(definitions)
