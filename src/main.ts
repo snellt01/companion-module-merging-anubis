@@ -7,6 +7,7 @@ import { busChoices, preampChoices, stripChoices, UpdateFeedbacks, type Feedback
 import { UpdatePresets } from './presets.js'
 import { AnubisConnection } from './anubis.js'
 import { type AnubisModel, MUSIC_MISSION, TESTED_FIRMWARE } from './model.js'
+import type { Write } from './writes.js'
 
 export type ModuleSchema = {
 	config: ModuleConfig
@@ -72,6 +73,28 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 		UpdateVariableDefinitions(this)
 	}
 
+	/**
+	 * Build a write from the current state and send it. Anything refused,
+	 * unacknowledged or not reported back is logged as a warning.
+	 */
+	async write(build: (model: AnubisModel) => Write | null): Promise<void> {
+		const model = this.anubis?.model
+		if (!this.anubis || !model) {
+			this.log('warn', 'Not connected to the Anubis; nothing sent')
+			return
+		}
+		let write: Write | null = null
+		try {
+			write = build(model)
+			if (!write) return // already in that state
+			const confirmed = await this.anubis.write(write)
+			if (confirmed === false) this.log('warn', `${write.description}: the Anubis didn't report the change back`)
+		} catch (e) {
+			const what = write ? `${write.description}: ` : ''
+			this.log('warn', `${what}${e instanceof Error ? e.message : String(e)}`)
+		}
+	}
+
 	private connect(): void {
 		this.anubis = null
 		const host = this.config.host?.trim()
@@ -114,6 +137,7 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 		const key = JSON.stringify([stripChoices(model), busChoices(model), preampChoices(model)])
 		if (key !== this.definitionsKey) {
 			this.definitionsKey = key
+			this.updateActions()
 			this.updateFeedbacks()
 			this.updateVariableDefinitions()
 		}

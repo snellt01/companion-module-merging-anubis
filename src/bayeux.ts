@@ -1,9 +1,13 @@
 // A small Bayeux (CometD) client over long-polling, for the Anubis's web UI
 // API at http://<anubis>/cometd.
 //
-// Listen-only: it sends the protocol's own messages (handshake, subscribe,
-// connect, disconnect) and nothing else. Writes will be added through a
-// fixed list of the web UI's own messages, never a general publish.
+// It sends the protocol's own messages (handshake, subscribe, connect,
+// disconnect) and one kind of publish: a write from the module's fixed list
+// (writes.ts) on /service/ravenna/settings, checked again here before it
+// goes. Nothing else.
+
+import { isAllowedWrite } from './writes.js'
+import type { JsonObject } from './tree.js'
 
 export interface BayeuxMessage {
 	channel: string
@@ -21,6 +25,7 @@ export interface BayeuxMessage {
 }
 
 const META_CHANNELS = new Set(['/meta/handshake', '/meta/subscribe', '/meta/connect', '/meta/disconnect'])
+const SETTINGS_CHANNEL = '/service/ravenna/settings'
 // Allowance on top of the server's long-poll timeout, as the web UI uses.
 const MAX_NETWORK_DELAY = 5000
 
@@ -50,11 +55,8 @@ export class BayeuxListener {
 		return this.abort.signal.aborted
 	}
 
-	private async send(message: Omit<BayeuxMessage, 'id' | 'clientId'>, timeoutMs: number): Promise<BayeuxMessage[]> {
-		if (!META_CHANNELS.has(message.channel)) throw new Error(`refusing to send to ${message.channel}`)
-		const body: BayeuxMessage = { ...message, id: String(++this.nextId) }
-		if (this.clientId && message.channel !== '/meta/handshake') body.clientId = this.clientId
-		const response = await fetch(`${this.baseUrl}/${message.channel.slice('/meta/'.length)}`, {
+	private async post(url: string, body: BayeuxMessage, timeoutMs: number): Promise<BayeuxMessage[]> {
+		const response = await fetch(url, {
 			method: 'POST',
 			headers: {
 				'Content-Type': 'application/json;charset=UTF-8',
@@ -65,10 +67,17 @@ export class BayeuxListener {
 		})
 		const setCookies = response.headers.getSetCookie()
 		if (setCookies.length > 0) this.cookie = setCookies.map((c) => c.split(';')[0]).join('; ')
-		if (!response.ok) throw new BayeuxError(`${message.channel}: HTTP ${response.status}`)
+		if (!response.ok) throw new BayeuxError(`${body.channel}: HTTP ${response.status}`)
 		const replies = (await response.json()) as BayeuxMessage[]
-		if (!Array.isArray(replies)) throw new BayeuxError(`${message.channel}: unexpected reply`)
+		if (!Array.isArray(replies)) throw new BayeuxError(`${body.channel}: unexpected reply`)
 		return replies
+	}
+
+	private async send(message: Omit<BayeuxMessage, 'id' | 'clientId'>, timeoutMs: number): Promise<BayeuxMessage[]> {
+		if (!META_CHANNELS.has(message.channel)) throw new Error(`refusing to send to ${message.channel}`)
+		const body: BayeuxMessage = { ...message, id: String(++this.nextId) }
+		if (this.clientId && message.channel !== '/meta/handshake') body.clientId = this.clientId
+		return this.post(`${this.baseUrl}/${message.channel.slice('/meta/'.length)}`, body, timeoutMs)
 	}
 
 	private reply(replies: BayeuxMessage[], channel: string): BayeuxMessage {
@@ -120,6 +129,27 @@ export class BayeuxListener {
 			this.deliver(replies)
 			if (this.interval > 0) await new Promise((resolve) => setTimeout(resolve, this.interval))
 		}
+	}
+
+	/**
+	 * Publish one write from the fixed list and wait for the server to
+	 * acknowledge it. Over long-polling a publish is POSTed to /cometd itself;
+	 * anything else in the reply is delivered as usual.
+	 */
+	async publish(data: { path: string; value: JsonObject }): Promise<void> {
+		if (!isAllowedWrite(data)) throw new Error(`refusing to publish ${JSON.stringify(data)}`)
+		if (!this.clientId || this.stopped) throw new BayeuxError('not connected')
+		const body: BayeuxMessage = {
+			channel: SETTINGS_CHANNEL,
+			id: String(++this.nextId),
+			clientId: this.clientId,
+			data: { path: data.path, value: data.value },
+		}
+		const replies = await this.post(this.baseUrl, body, MAX_NETWORK_DELAY)
+		const ack = replies.find((r) => r.id === body.id && r.channel === SETTINGS_CHANNEL)
+		this.deliver(replies.filter((r) => r !== ack))
+		if (!ack) throw new BayeuxError(`${SETTINGS_CHANNEL}: no acknowledgement`)
+		if (!ack.successful) throw new BayeuxError(`${SETTINGS_CHANNEL}: ${ack.error ?? 'refused'}`)
 	}
 
 	/** Stop listening and tell the server we've gone. */

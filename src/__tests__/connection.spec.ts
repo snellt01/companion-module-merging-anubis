@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { AnubisConnection, type AnubisEvents } from '../anubis.js'
 import { BayeuxListener } from '../bayeux.js'
-import type { AnubisModel } from '../model.js'
-import { FakeAnubis } from './fake-anubis.js'
+import { AnubisModel } from '../model.js'
+import { stripMute } from '../writes.js'
+import { FakeAnubis, fixtureState } from './fake-anubis.js'
 
 const SEND = (strip: number, bus: number) =>
 	`$._oem_ui_process_engine.music.mixer.strips[?(@.id==${strip})][0].sends[?(@.id==${bus})][0]`
@@ -47,8 +48,84 @@ describe('AnubisConnection against a pretend Anubis', () => {
 	afterEach(async () => {
 		await connection?.stop()
 		await fake.close()
-		// The read-only module sends nothing but the protocol's own messages.
+		// Nothing but the protocol's own messages and the publishes each test expects.
 		expect(fake.forbidden).toEqual([])
+	})
+
+	it('sends nothing but the protocol messages when it connects', async () => {
+		connection = new AnubisConnection({ url, retryMs: 50 }, events)
+		connection.start()
+		await waitFor(() => loads === 1)
+		await new Promise((resolve) => setTimeout(resolve, 300))
+		expect(fake.channelsReceived().every((c) => c.startsWith('/meta/'))).toBe(true)
+	})
+
+	it('mutes a strip and sees the change come back', async () => {
+		fake.expect(SEND(1210, 0), { mute: true })
+		connection = new AnubisConnection({ url, retryMs: 50 }, events)
+		connection.start()
+		await waitFor(() => loads === 1)
+		const write = stripMute(latest!, 1210, 0, 'toggle')!
+		expect(await connection.write(write)).toBe(true)
+		expect(fake.published).toEqual([{ path: SEND(1210, 0), value: { mute: true } }])
+		expect(latest?.strip(1210)?.sends.get(0)?.mute).toBe(true)
+	})
+
+	it('mutes a linked pair through its first strip', async () => {
+		fake.expect(SEND(1200, 0), { link_mute: true })
+		// What a real unit sent back
+		fake.echo = (c) => [
+			c,
+			{ path: SEND(1200, 0), value: { mute: true, link_mute: true } },
+			{ path: SEND(1201, 0), value: { mute: true, link_mute: true } },
+		]
+		connection = new AnubisConnection({ url, retryMs: 50 }, events)
+		connection.start()
+		await waitFor(() => loads === 1)
+		expect(await connection.write(stripMute(latest!, 1200, 0, 'on')!)).toBe(true)
+		expect(fake.published).toHaveLength(1)
+		expect(latest?.strip(1201)?.sends.get(0)?.mute).toBe(true)
+	})
+
+	it("reports a write that doesn't come back", async () => {
+		fake.expect(SEND(1210, 0), { mute: true })
+		fake.echo = () => []
+		connection = new AnubisConnection({ url, retryMs: 50, confirmMs: 200 }, events)
+		connection.start()
+		await waitFor(() => loads === 1)
+		expect(await connection.write(stripMute(latest!, 1210, 0, 'on')!)).toBe(false)
+	})
+
+	it('sends one write per control every 50 ms, the latest winning', async () => {
+		fake.expect(SEND(1210, 0), { mute: true })
+		fake.expect(SEND(1210, 0), { mute: false })
+		fake.echo = () => []
+		connection = new AnubisConnection({ url, retryMs: 50, confirmMs: 100 }, events)
+		connection.start()
+		await waitFor(() => loads === 1)
+		const on = stripMute(latest!, 1210, 0, 'on')!
+		const off = { ...on, value: { mute: false } }
+		const start = Date.now()
+		// The second replaces the first, and the third the second, before they go
+		const writes = [on, off, on].map(async (w) => connection!.write(w))
+		const sentAt: number[] = []
+		await waitFor(() => {
+			if (fake.published.length > sentAt.length) sentAt.push(Date.now())
+			return fake.published.length === 2
+		})
+		expect(await Promise.all(writes)).toEqual([false, null, false])
+		expect(fake.published.map((c) => c.value)).toEqual([{ mute: true }, { mute: true }])
+		expect(sentAt[1] - start).toBeGreaterThanOrEqual(45)
+	})
+
+	it('refuses to write when not connected', async () => {
+		await fake.close()
+		connection = new AnubisConnection({ url, retryMs: 50 }, events)
+		connection.start()
+		const write = stripMute(new AnubisModel(fixtureState()), 1210, 0, 'on')!
+		await expect(connection.write(write)).rejects.toThrow('Not connected')
+		fake = new FakeAnubis() // for afterEach
+		await fake.start()
 	})
 
 	it('joins the feed, reads the state and reports ok', async () => {
@@ -125,6 +202,16 @@ describe('BayeuxListener', () => {
 		const send = Reflect.get(listener, 'send') as (m: { channel: string }, t: number) => Promise<unknown>
 		await expect(send.call(listener, { channel: '/service/ravenna/settings' }, 1000)).rejects.toThrow(
 			'refusing to send to /service/ravenna/settings',
+		)
+	})
+
+	it('refuses to publish anything outside the fixed list', async () => {
+		const listener = new BayeuxListener('http://127.0.0.1:9/cometd', () => undefined)
+		await expect(listener.publish({ path: '$.identity', value: { reboot: true } })).rejects.toThrow(
+			'refusing to publish',
+		)
+		await expect(listener.publish({ path: SEND(1210, 0), value: { mute: true, gain: 60 } })).rejects.toThrow(
+			'refusing to publish',
 		)
 	})
 })

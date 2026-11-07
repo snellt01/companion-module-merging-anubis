@@ -24,8 +24,10 @@ export interface Strip {
 	name: string
 	/** For a linked pair shown as one strip: the other strip's id */
 	partnerId: number | null
-	/** Shown as one strip with its partner, and this is the first of the two */
+	/** Shown as one strip with its partner, and this is the one shown (the lower id, as in the web UI) */
 	isPairLeader: boolean
+	/** Linked and collapsed, as the web UI tests it (whether or not the partner is in the mixer) */
+	collapsedLink: boolean
 	connected: boolean
 	sends: Map<number, Send>
 }
@@ -112,19 +114,20 @@ export class AnubisModel {
 			.map(obj)
 			.sort((a, b) => num(a.display_number) - num(b.display_number))
 			.map((d) => num(d.id, -1))
-		const seen = new Set<number>()
 		const result: Strip[] = []
 		for (const id of shown) {
 			const s = byId.get(id)
 			if (!s) continue
 			const input = inputs.get(num(s.input_id, -1)) ?? {}
 			const linked = num(input.linked_input_id, -1)
-			const partnerId = linked >= 0 && bool(input.collapsed_link) && byId.has(linked) ? linked : null
+			const collapsedLink = linked !== -1 && bool(input.collapsed_link)
+			const partnerId = collapsedLink && byId.has(linked) ? linked : null
 			result.push({
 				id,
 				name: str(s.name),
 				partnerId,
-				isPairLeader: partnerId !== null && !seen.has(partnerId),
+				isPairLeader: partnerId !== null && id < partnerId,
+				collapsedLink,
 				connected: bool(input.connected) && num(input.connection_state) === 1,
 				sends: new Map(
 					arr(s.sends).map((raw) => {
@@ -143,7 +146,6 @@ export class AnubisModel {
 					}),
 				),
 			})
-			seen.add(id)
 		}
 		return result
 	}

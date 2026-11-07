@@ -5,8 +5,8 @@ mixer faders, mutes, solos and pan, bus master, mute, dim and mono, and
 the preamps. Buttons show the Anubis's current state, whether a change
 was made in Companion, on the unit, in its web UI or over OSC.
 
-**This version only reads the Anubis.** It shows the state; actions that
-change things come in a later version.
+**This version can only mute strips.** It shows the whole state; the
+other actions that change things come in later versions.
 
 ### Configuration
 
@@ -37,6 +37,12 @@ Numbers in the names are the Anubis's own ids (MIC 1 is 1000, MIC 2 is
 
 ### Actions
 
+- **Strip: mute**: mutes, unmutes or toggles a strip on a chosen bus,
+  as the strip's mute button does. A linked pair shown as one strip is
+  muted together. Like the Anubis's web UI, it won't mute a strip whose
+  input isn't connected; the log says why when it refuses. A strip
+  change on MIXER also changes MIXER-ALT and CUE1 (the Anubis does this
+  itself).
 - **Read the Anubis state again**: reads everything again. Sends nothing
   to the mixer.
 
