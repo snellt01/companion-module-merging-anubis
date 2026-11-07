@@ -146,4 +146,27 @@ describe('variables', () => {
 		// No 48 V variable where the preamp has no 48 V
 		expect(values).not.toHaveProperty('preamp_1002_48v')
 	})
+
+	it('shows level and pan on the other buses a strip is shown on', () => {
+		const m = model()
+		const values = variableValues(m)
+		expect(values).toMatchObject({
+			strip_1000_bus3_gain: '0.0', // MIC 1 on CUE2
+			strip_1200_bus6_gain: '-143.3', // Stream on CUE5
+			strip_1200_bus1_pan: -100,
+		})
+		expect(variableDefinitions(m).strip_1200_bus6_gain?.name).toBe('Stream-L: level on CUE5 (dB)')
+		// MIXER keeps the plain names; a strip shown on no bus gets none
+		expect(values).not.toHaveProperty('strip_1000_bus0_gain')
+		expect(Object.keys(values).filter((k) => k.startsWith('strip_4_bus'))).toEqual([])
+	})
+
+	it('follows a pan change on one bus only', () => {
+		const tree = fixtureState()
+		applyChange(tree, '$._oem_ui_process_engine.music.mixer.strips[?(@.id==1000)][0].sends[?(@.id==3)][0]', { pan: 40 })
+		const values = variableValues(new AnubisModel(tree))
+		expect(values.strip_1000_bus3_pan).toBe(40)
+		expect(values.strip_1000_bus4_pan).toBe(0)
+		expect(values.strip_1000_pan).toBe(0)
+	})
 })

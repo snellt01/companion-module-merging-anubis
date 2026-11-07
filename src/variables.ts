@@ -4,8 +4,15 @@ import { type AnubisModel, formatGain, INPUT_MODES } from './model.js'
 
 export type VariablesSchema = CompanionVariableValues
 
-// Strip variables are for the MIXER bus; other buses are in the feedbacks.
+// strip_<id>_* are for the MIXER bus. Level and pan on the other buses are
+// strip_<id>_bus<B>_*, for each bus the strip is shown on (as the web UI
+// draws it); mute and solo there are in the feedbacks.
 const MIXER_BUS = 0
+
+/** The sends, other than MIXER's, that get their own variables */
+function otherSends(model: AnubisModel, strip: ReturnType<AnubisModel['strips']>[number]) {
+	return [...strip.sends.values()].filter((send) => send.bus !== MIXER_BUS && send.visible && model.bus(send.bus))
+}
 
 export function UpdateVariableDefinitions(self: ModuleInstance): void {
 	self.setVariableDefinitions(variableDefinitions(self.anubis?.model ?? null))
@@ -22,7 +29,12 @@ export function variableDefinitions(model: AnubisModel | null): CompanionVariabl
 		defs[`strip_${s.id}_gain`] = { name: `${s.name}: level on MIXER (dB)` }
 		defs[`strip_${s.id}_mute`] = { name: `${s.name}: muted on MIXER` }
 		defs[`strip_${s.id}_solo`] = { name: `${s.name}: solo on MIXER` }
-		defs[`strip_${s.id}_pan`] = { name: `${s.name}: pan (-100 left to 100 right)` }
+		defs[`strip_${s.id}_pan`] = { name: `${s.name}: pan on MIXER (-100 left to 100 right)` }
+		for (const send of otherSends(model, s)) {
+			const bus = model.bus(send.bus)!.name
+			defs[`strip_${s.id}_bus${send.bus}_gain`] = { name: `${s.name}: level on ${bus} (dB)` }
+			defs[`strip_${s.id}_bus${send.bus}_pan`] = { name: `${s.name}: pan on ${bus}` }
+		}
 	}
 	for (const b of model.busses()) {
 		defs[`bus_${b.id}_name`] = { name: `${b.name}: name` }
@@ -58,6 +70,10 @@ export function variableValues(model: AnubisModel): CompanionVariableValues {
 		values[`strip_${s.id}_mute`] = send?.mute ?? false
 		values[`strip_${s.id}_solo`] = send?.solo ?? false
 		values[`strip_${s.id}_pan`] = send?.pan ?? 0
+		for (const other of otherSends(model, s)) {
+			values[`strip_${s.id}_bus${other.bus}_gain`] = formatGain(other.faderGain)
+			values[`strip_${s.id}_bus${other.bus}_pan`] = other.pan
+		}
 	}
 	for (const b of model.busses()) {
 		values[`bus_${b.id}_name`] = b.name

@@ -30,7 +30,12 @@ Numbers in the names are the Anubis's own ids (MIC 1 is 1000, MIC 2 is
 
 - `strip_<id>_name`, `_gain` (fader on MIXER in dB, `-inf` when off; a
   linked pair shows its shared fader, as the Anubis does), `_mute`,
-  `_solo`, `_pan` (-100 left to 100 right)
+  `_solo`, `_pan` (-100 left to 100 right), all on MIXER
+- `strip_<id>_bus<bus id>_gain` and `_pan`: the same on each other bus
+  the strip is shown on (e.g. `strip_1000_bus3_gain`, MIC 1 on CUE2).
+  Pan can differ from bus to bus; on buses where the Anubis links pan
+  to the mix, it's the value the web UI shows greyed out. Mute and solo
+  on other buses are in the feedbacks.
 - `bus_<id>_name`, `_gain` (master, dB), `_mute`, `_dim`, `_mono`
 - `preamp_<id>_mode`, `_gain` (dB), `_48v`, `_pad`, `_lift` (where the
   preamp has them), `_phase`, `_lowcut`, `_cut`, `_lock`

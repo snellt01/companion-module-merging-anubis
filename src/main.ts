@@ -146,7 +146,13 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 			busChoices(model),
 			preampChoices(model),
 			// What the action lists filter on
-			model.strips().map((s) => [s.id, s.type, s.collapsedLink]),
+			model.strips().map((s) => [
+				s.id,
+				s.type,
+				s.collapsedLink,
+				// The buses it's shown on (its per-bus variables)
+				[...s.sends.values()].filter((send) => send.visible).map((send) => send.bus),
+			]),
 			model.busses().map((b) => [b.id, b.monitors, b.panEditable]),
 		])
 		if (key !== this.definitionsKey) {
