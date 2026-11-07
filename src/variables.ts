@@ -1,15 +1,81 @@
+import type { CompanionVariableDefinitions, CompanionVariableValues } from '@companion-module/base'
 import type ModuleInstance from './main.js'
+import { type AnubisModel, formatGain, INPUT_MODES } from './model.js'
 
-export type VariablesSchema = {
-	variable1: string
-	variable2: string
-	variable3: string
-}
+export type VariablesSchema = CompanionVariableValues
+
+// Strip variables are for the MIXER bus; other buses are in the feedbacks.
+const MIXER_BUS = 0
 
 export function UpdateVariableDefinitions(self: ModuleInstance): void {
-	self.setVariableDefinitions({
-		variable1: { name: 'My first variable' },
-		variable2: { name: 'My second variable' },
-		variable3: { name: 'Another variable' },
-	})
+	self.setVariableDefinitions(variableDefinitions(self.anubis?.model ?? null))
+}
+
+export function variableDefinitions(model: AnubisModel | null): CompanionVariableDefinitions<VariablesSchema> {
+	const defs: CompanionVariableDefinitions<VariablesSchema> = {
+		device_name: { name: 'Anubis name' },
+		firmware: { name: 'Anubis firmware version' },
+	}
+	if (!model) return defs
+	for (const s of model.strips()) {
+		defs[`strip_${s.id}_name`] = { name: `${s.name}: name` }
+		defs[`strip_${s.id}_gain`] = { name: `${s.name}: level on MIXER (dB)` }
+		defs[`strip_${s.id}_mute`] = { name: `${s.name}: muted on MIXER` }
+		defs[`strip_${s.id}_solo`] = { name: `${s.name}: solo on MIXER` }
+		defs[`strip_${s.id}_pan`] = { name: `${s.name}: pan (-100 left to 100 right)` }
+	}
+	for (const b of model.busses()) {
+		defs[`bus_${b.id}_name`] = { name: `${b.name}: name` }
+		defs[`bus_${b.id}_gain`] = { name: `${b.name}: master level (dB)` }
+		defs[`bus_${b.id}_mute`] = { name: `${b.name}: muted` }
+		defs[`bus_${b.id}_dim`] = { name: `${b.name}: dimmed` }
+		defs[`bus_${b.id}_mono`] = { name: `${b.name}: mono` }
+	}
+	for (const p of model.preamps()) {
+		const caps = p.capabilities
+		defs[`preamp_${p.inputId}_mode`] = { name: `${p.name} preamp: input type` }
+		defs[`preamp_${p.inputId}_gain`] = { name: `${p.name} preamp: gain (dB)` }
+		if (caps['48V'] === true) defs[`preamp_${p.inputId}_48v`] = { name: `${p.name} preamp: 48 V` }
+		if (caps.pad === true) defs[`preamp_${p.inputId}_pad`] = { name: `${p.name} preamp: pad` }
+		if (caps.lift === true) defs[`preamp_${p.inputId}_lift`] = { name: `${p.name} preamp: lift` }
+		defs[`preamp_${p.inputId}_phase`] = { name: `${p.name} preamp: phase invert` }
+		defs[`preamp_${p.inputId}_lowcut`] = { name: `${p.name} preamp: low cut` }
+		defs[`preamp_${p.inputId}_cut`] = { name: `${p.name} preamp: cut` }
+		defs[`preamp_${p.inputId}_lock`] = { name: `${p.name} preamp: locked` }
+	}
+	return defs
+}
+
+export function variableValues(model: AnubisModel): CompanionVariableValues {
+	const values: CompanionVariableValues = {
+		device_name: model.deviceName,
+		firmware: model.firmware,
+	}
+	for (const s of model.strips()) {
+		const send = s.sends.get(MIXER_BUS)
+		values[`strip_${s.id}_name`] = s.name
+		values[`strip_${s.id}_gain`] = send ? formatGain(send.gain) : ''
+		values[`strip_${s.id}_mute`] = send?.mute ?? false
+		values[`strip_${s.id}_solo`] = send?.solo ?? false
+		values[`strip_${s.id}_pan`] = send?.pan ?? 0
+	}
+	for (const b of model.busses()) {
+		values[`bus_${b.id}_name`] = b.name
+		values[`bus_${b.id}_gain`] = formatGain(b.masterGain)
+		values[`bus_${b.id}_mute`] = b.mute
+		values[`bus_${b.id}_dim`] = b.dim
+		values[`bus_${b.id}_mono`] = b.mono
+	}
+	for (const p of model.preamps()) {
+		values[`preamp_${p.inputId}_mode`] = INPUT_MODES[p.mode] ?? String(p.mode)
+		values[`preamp_${p.inputId}_gain`] = (p.gain / 10).toFixed(1)
+		if (p.capabilities['48V'] === true) values[`preamp_${p.inputId}_48v`] = p.phantom
+		if (p.capabilities.pad === true) values[`preamp_${p.inputId}_pad`] = p.pad
+		if (p.capabilities.lift === true) values[`preamp_${p.inputId}_lift`] = p.lift
+		values[`preamp_${p.inputId}_phase`] = p.phase
+		values[`preamp_${p.inputId}_lowcut`] = p.lowCut
+		values[`preamp_${p.inputId}_cut`] = p.cut
+		values[`preamp_${p.inputId}_lock`] = p.lock
+	}
+	return values
 }
