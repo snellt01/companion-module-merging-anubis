@@ -87,6 +87,10 @@ install scripts and packages newer than 3 days. The pre-commit hook
 put a corepack shim there (`corepack enable --install-directory <dir>
 yarn`). Module API `@companion-module/base` 2.1, runtime `node26`.
 
+CI: Node CI (build, lint, tests) runs on every push. Bitfocus's module
+check is skipped while the repo is private (its checkout token can't
+clone a private repo) and runs once it's public.
+
 Release (only if the user decides to): Bitfocus creates
 `bitfocus/companion-module-merging-anubis` on request, tag `vX.Y.Z`,
 submit the version at developer.bitfocus.io for review.
